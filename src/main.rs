@@ -62,6 +62,10 @@ struct Args {
     #[arg(long)]
     enable_spectrum: bool,
 
+    /// Interval between active spectrum scans in seconds
+    #[arg(long, default_value_t = 900)]
+    spectrum_interval: u64,
+
     /// OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
     #[arg(long)]
     otlp_endpoint: Option<String>,
@@ -74,6 +78,21 @@ struct Args {
 struct ScrapeResult {
     metrics_text: String,
     observation: automation::ScrapeObservation,
+}
+
+#[derive(Default)]
+struct SpectrumCache {
+    html: Option<String>,
+    last_scan_at: Option<Instant>,
+}
+
+impl SpectrumCache {
+    fn should_refresh(&self, interval: Duration) -> bool {
+        match self.last_scan_at {
+            None => true,
+            Some(last) => last.elapsed() >= interval,
+        }
+    }
 }
 
 #[tokio::main]
@@ -103,11 +122,15 @@ async fn main() -> Result<()> {
         args.state_up_threshold,
     );
 
+    let mut spectrum_cache = SpectrumCache::default();
+    let spectrum_interval = Duration::from_secs(args.spectrum_interval);
     let initial_scrape = do_scrape(
         &client,
         None,
         args.capacity_margin_percent,
         args.enable_spectrum,
+        spectrum_interval,
+        &mut spectrum_cache,
     )
     .await;
     if let Some(outputs) = automation_outputs.as_mut() {
@@ -145,15 +168,24 @@ async fn main() -> Result<()> {
         let interval_secs = args.interval;
         let capacity_margin_percent = args.capacity_margin_percent;
         let enable_spectrum = args.enable_spectrum;
+        let spectrum_interval = Duration::from_secs(args.spectrum_interval);
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
             let mut automation_outputs = automation_outputs;
+            let mut spectrum_cache = spectrum_cache;
             loop {
                 interval.tick().await;
                 let otlp = otlp_client.read().await;
                 let otlp_ref = otlp.as_ref();
-                let scrape =
-                    do_scrape(&client, otlp_ref, capacity_margin_percent, enable_spectrum).await;
+                let scrape = do_scrape(
+                    &client,
+                    otlp_ref,
+                    capacity_margin_percent,
+                    enable_spectrum,
+                    spectrum_interval,
+                    &mut spectrum_cache,
+                )
+                .await;
                 if let Some(outputs) = automation_outputs.as_mut() {
                     if let Err(e) = outputs.update(&scrape.observation) {
                         tracing::warn!("Failed to write automation output files: {}", e);
@@ -194,10 +226,24 @@ async fn do_scrape(
     otlp: Option<&otlp::OtlpClient>,
     capacity_margin_percent: u8,
     enable_spectrum: bool,
+    spectrum_interval: Duration,
+    spectrum_cache: &mut SpectrumCache,
 ) -> ScrapeResult {
     let start = Instant::now();
-    match client.fetch_all(enable_spectrum).await {
+    match client.fetch_all().await {
         Ok(pages) => {
+            if enable_spectrum && spectrum_cache.should_refresh(spectrum_interval) {
+                match client.fetch_spectrum().await {
+                    Ok(html) => {
+                        spectrum_cache.html = Some(html);
+                        spectrum_cache.last_scan_at = Some(Instant::now());
+                    }
+                    Err(e) => {
+                        tracing::warn!("Spectrum scan failed: {}", e);
+                    }
+                }
+            }
+
             let duration = start.elapsed().as_secs_f64();
             match parser::parse_all(
                 &pages.status,
@@ -208,7 +254,7 @@ async fn do_scrape(
                 &pages.event,
                 &pages.config_params,
                 &pages.product,
-                pages.spectrum.as_deref(),
+                spectrum_cache.html.as_deref(),
                 duration,
             ) {
                 Ok(data) => {

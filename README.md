@@ -45,6 +45,8 @@ Options:
   --capacity-margin-percent <PERCENT>
                                 Percent of configured service flow bandwidth to expose as shaped capacity [default: 95]
   --enable-spectrum            Actively trigger a modem spectrum scan and export spectrum metrics
+  --spectrum-interval <SECONDS>
+                                Interval between active spectrum scans [default: 900]
 
   --otlp-endpoint <URL>        OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
   --otlp-header <KEY=VALUE>    OTLP header, can be repeated (e.g. Authorization=Basic...)
@@ -124,6 +126,10 @@ Example:
 Files are written atomically and only rewritten when their semantic content changes, making them suitable for `systemd.path` or other file-watch based automation.
 
 Example systemd integration files are provided in [`examples/systemd/`](examples/systemd/).
+
+## Spectrum Scanning
+
+When `--enable-spectrum` is set, the exporter performs an active modem spectrum scan and exposes the results as Prometheus and OTLP metrics. Spectrum scans use their own interval via `--spectrum-interval` and the most recent successful scan result is cached between normal scrape cycles.
 
 ## Scraping Model
 
