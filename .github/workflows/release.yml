@@ -59,7 +59,7 @@ jobs:
         run: strip target/${{ matrix.target }}/release/cm3500-b-ce-exporter || true
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: target/${{ matrix.target }}/release/cm3500-b-ce-exporter
