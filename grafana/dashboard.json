@@ -1,7 +1,5 @@
 {
-  "annotations": {
-    "list": []
-  },
+  "annotations": { "list": [] },
   "description": "ARRIS CM3500B CE cable modem DOCSIS 3.1 exporter dashboard",
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -20,11 +18,7 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 3, "x": 0, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_up",
-          "refId": "A",
-          "instant": true
-        }
+        { "expr": "cm3500_up", "refId": "A", "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
@@ -40,17 +34,10 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 3, "x": 3, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_cm_status",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_cm_status", "refId": "A", "instant": true, "format": "table" }
       ],
       "fieldConfig": {
-        "defaults": {
-          "custom": { "filterable": false }
-        },
+        "defaults": { "custom": { "filterable": false } },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "status" },
@@ -70,11 +57,7 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 3, "x": 6, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_uptime_seconds",
-          "refId": "A",
-          "instant": true
-        }
+        { "expr": "cm3500_uptime_seconds", "refId": "A", "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
@@ -88,11 +71,7 @@
       "type": "gauge",
       "gridPos": { "h": 3, "w": 3, "x": 9, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_dhcp_lease_remaining_seconds",
-          "refId": "A",
-          "instant": true
-        }
+        { "expr": "cm3500_dhcp_lease_remaining_seconds", "refId": "A", "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
@@ -108,12 +87,7 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 2, "x": 12, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_dhcp_state",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_dhcp_state", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true } } }
@@ -124,12 +98,7 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 2, "x": 14, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_bpi_state",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_bpi_state", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true } } }
@@ -140,11 +109,7 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 2, "x": 16, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_cpe_dynamic",
-          "refId": "A",
-          "instant": true
-        }
+        { "expr": "cm3500_cpe_dynamic", "refId": "A", "instant": true }
       ],
       "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
     },
@@ -153,11 +118,7 @@
       "type": "stat",
       "gridPos": { "h": 3, "w": 2, "x": 18, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_scrape_duration_seconds",
-          "refId": "A",
-          "instant": true
-        }
+        { "expr": "cm3500_scrape_duration_seconds", "refId": "A", "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
@@ -167,16 +128,22 @@
       }
     },
     {
+      "title": "Ethernet PHY",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 20, "y": 1 },
+      "targets": [
+        { "expr": "cm3500_product_ethernet_phy_info", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true } } }
+      ]
+    },
+    {
       "title": "Modem Info",
       "type": "table",
-      "gridPos": { "h": 3, "w": 4, "x": 20, "y": 1 },
+      "gridPos": { "h": 3, "w": 2, "x": 22, "y": 1 },
       "targets": [
-        {
-          "expr": "cm3500_info",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_info", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true }, "renameByName": {} } }
@@ -207,13 +174,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dBmV",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "pointSize": 5,
-            "showPoints": "auto"
-          },
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 10, "pointSize": 5, "showPoints": "auto" },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -224,11 +185,7 @@
               { "color": "orange", "value": 12 }
             ]
           }
-        },
-        "overrides": [
-          { "matcher": { "id": "byFrameRefID", "options": "B" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } } ] },
-          { "matcher": { "id": "byFrameRefID", "options": "C" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } } ] }
-        ]
+        }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
@@ -249,21 +206,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dB",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "pointSize": 5,
-            "showPoints": "auto"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 30 },
-              { "color": "green", "value": 33 }
-            ]
-          }
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 10, "pointSize": 5, "showPoints": "auto" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 30 }, { "color": "green", "value": 33 }] }
         }
       },
       "options": {
@@ -276,17 +220,9 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 },
       "targets": [
-        {
-          "expr": "increase(cm3500_downstream_qam_corrected_total[5m])",
-          "refId": "A",
-          "legendFormat": "Ch{{channel}} DCID{{dcid}}"
-        }
+        { "expr": "increase(cm3500_downstream_qam_corrected_total[5m])", "refId": "A", "legendFormat": "Ch{{channel}} DCID{{dcid}}" }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": { "drawStyle": "bars", "fillOpacity": 50 }
-        }
-      },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 50 } } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"] }
@@ -297,17 +233,10 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 },
       "targets": [
-        {
-          "expr": "increase(cm3500_downstream_qam_uncorrectable_total[5m])",
-          "refId": "A",
-          "legendFormat": "Ch{{channel}} DCID{{dcid}}"
-        }
+        { "expr": "increase(cm3500_downstream_qam_uncorrectable_total[5m])", "refId": "A", "legendFormat": "Ch{{channel}} DCID{{dcid}}" }
       ],
       "fieldConfig": {
-        "defaults": {
-          "custom": { "drawStyle": "bars", "fillOpacity": 50 },
-          "color": { "mode": "fixed", "fixedColor": "red" }
-        }
+        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 50 }, "color": { "mode": "fixed", "fixedColor": "red" } }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
@@ -315,16 +244,11 @@
       }
     },
     {
-      "title": "DS Power Bar Chart",
+      "title": "DS Power Tilt (Bar Chart)",
       "type": "barchart",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 },
       "targets": [
-        {
-          "expr": "cm3500_downstream_qam_power_dbmv",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_downstream_qam_power_dbmv", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         {
@@ -338,23 +262,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dBmV",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": -7 },
-              { "color": "green", "value": 10 },
-              { "color": "red", "value": 12 }
-            ]
-          }
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": -7 }, { "color": "green", "value": 10 }, { "color": "red", "value": 12 }] }
         }
       },
-      "options": {
-        "xTickLabelRotation": 45,
-        "groupWidth": 0.7,
-        "barWidth": 0.9,
-        "stacking": "none"
-      }
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9, "stacking": "none" }
     },
 
     {
@@ -368,24 +279,13 @@
       "type": "timeseries",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
       "targets": [
-        {
-          "expr": "cm3500_downstream_ofdm_rxmer_db",
-          "refId": "A",
-          "legendFormat": "Ch{{channel}} {{type}}"
-        }
+        { "expr": "cm3500_downstream_ofdm_rxmer_db", "refId": "A", "legendFormat": "Ch{{channel}} {{measurement}}" }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "dB",
           "custom": { "drawStyle": "line", "fillOpacity": 10 },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 25 },
-              { "color": "green", "value": 31 }
-            ]
-          }
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 25 }, { "color": "green", "value": 31 }] }
         }
       },
       "options": {
@@ -398,18 +298,8 @@
       "type": "table",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
       "targets": [
-        {
-          "expr": "cm3500_downstream_ofdm_active_subcarriers",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "expr": "cm3500_downstream_ofdm_channel_width_mhz",
-          "refId": "B",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_downstream_ofdm_active_subcarriers", "refId": "A", "instant": true, "format": "table" },
+        { "expr": "cm3500_downstream_ofdm_channel_width_mhz", "refId": "B", "instant": true, "format": "table" }
       ],
       "transformations": [
         { "id": "merge", "options": {} },
@@ -421,9 +311,7 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": { "custom": { "align": "left" } }
-      }
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } } }
     },
 
     {
@@ -437,29 +325,14 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
       "targets": [
-        {
-          "expr": "cm3500_upstream_qam_power_dbmv",
-          "refId": "A",
-          "legendFormat": "Ch{{channel}} UCID{{ucid}} {{frequency_mhz}}MHz {{modulation}}"
-        },
-        {
-          "expr": "cm3500_upstream_ofdma_tx_power_dbmv",
-          "refId": "B",
-          "legendFormat": "OFDMA Ch{{channel}} {{fft_type}}"
-        }
+        { "expr": "cm3500_upstream_qam_power_dbmv", "refId": "A", "legendFormat": "Ch{{channel}} UCID{{ucid}} {{frequency_mhz}}MHz {{modulation}}" },
+        { "expr": "cm3500_upstream_ofdma_tx_power_dbmv", "refId": "B", "legendFormat": "OFDMA Ch{{channel}} {{fft_type}}" }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "dBmV",
           "custom": { "drawStyle": "line", "fillOpacity": 10, "showPoints": "auto" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 49 },
-              { "color": "red", "value": 53 }
-            ]
-          }
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 49 }, { "color": "red", "value": 53 }] }
         }
       },
       "options": {
@@ -468,88 +341,241 @@
       }
     },
     {
-      "title": "Upstream Symbol Rate",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "title": "Upstream Power Delta (Tilt)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 12, "y": 30 },
       "targets": [
-        {
-          "expr": "cm3500_upstream_qam_symbol_rate_ksym",
-          "refId": "A",
-          "legendFormat": "Ch{{channel}} UCID{{ucid}}"
-        }
+        { "expr": "max(cm3500_upstream_qam_power_dbmv) - min(cm3500_upstream_qam_power_dbmv)", "refId": "A", "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "kSym/s",
-          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+          "unit": "dBmV",
+          "min": 0,
+          "max": 15,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "orange", "value": 6 }, { "color": "red", "value": 10 }] },
+          "decimals": 1
         }
+      },
+      "description": "Max - Min upstream SC-QAM power across all channels. High tilt indicates frequency-dependent attenuation on the coax drop."
+    },
+    {
+      "title": "Upstream Active Profile",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 30 },
+      "targets": [
+        { "expr": "cm3500_event_upstream_active_profile", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      },
+      "description": "Last seen upstream profile ID from event log. Profile downgrades (lower numbers) indicate upstream noise ingress on the CMTS segment."
+    },
+    {
+      "title": "OFDMA Profile ID",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 30 },
+      "targets": [
+        { "expr": "cm3500_event_ofdma_profile_id", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] }
+        }
+      },
+      "description": "Last seen OFDM/OFDMA profile ID from CM-STATUS events. Tracks dynamic profile assignment by the CMTS."
+    },
+    {
+      "title": "Upstream Symbol Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 34 },
+      "targets": [
+        { "expr": "cm3500_upstream_qam_symbol_rate_ksym", "refId": "A", "legendFormat": "Ch{{channel}} UCID{{ucid}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "kSym/s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
       }
+    },
+
+    {
+      "title": "RF Spectrum",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "collapsed": true
+    },
+    {
+      "title": "Spectrum Analyzer (Full Band)",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 39 },
+      "targets": [
+        { "expr": "cm3500_spectrum_bin_power_dbmv{chunk=\"0\"}", "refId": "A", "legendFormat": "{{frequency_mhz}} MHz" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15, "lineWidth": 1, "showPoints": "never" },
+          "color": { "mode": "continuous-GrYlRd" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "hidden" }
+      },
+      "description": "Per-bin spectrum power from the modem's active scan. Shows noise floor and potential ingress across 93–1218 MHz."
+    },
+    {
+      "title": "Spectrum Chunk Power Summary",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 49 },
+      "targets": [
+        { "expr": "cm3500_spectrum_chunk_power_dbmv{stat=\"min\"}", "refId": "A", "legendFormat": "{{center_mhz}} MHz min" },
+        { "expr": "cm3500_spectrum_chunk_power_dbmv{stat=\"avg\"}", "refId": "B", "legendFormat": "{{center_mhz}} MHz avg" },
+        { "expr": "cm3500_spectrum_chunk_power_dbmv{stat=\"max\"}", "refId": "C", "legendFormat": "{{center_mhz}} MHz max" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 1 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "description": "Min/avg/max power per 7.5 MHz chunk across the full downstream spectrum."
+    },
+    {
+      "title": "Spectrum Chunks Overview",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 49 },
+      "targets": [
+        { "expr": "cm3500_spectrum_chunks", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "decimals": 0 }
+      },
+      "description": "Number of 7.5 MHz chunks returned by the last spectrum scan."
+    },
+    {
+      "title": "Product Logging Components",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 49 },
+      "targets": [
+        { "expr": "cm3500_product_logging_components_enabled", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Components", "group": "Group" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "super-light-blue" } } },
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9 },
+      "description": "Enabled internal logging component counts by debug group from the product page."
     },
 
     {
       "title": "DHCP & Lease",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
       "collapsed": false
     },
     {
       "title": "DHCP Timers",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 39 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 59 },
       "targets": [
-        {
-          "expr": "cm3500_dhcp_lease_remaining_seconds",
-          "refId": "A",
-          "legendFormat": "Lease Remaining"
-        },
-        {
-          "expr": "cm3500_dhcp_renew_remaining_seconds",
-          "refId": "B",
-          "legendFormat": "Renew Remaining"
-        },
-        {
-          "expr": "cm3500_dhcp_rebind_remaining_seconds",
-          "refId": "C",
-          "legendFormat": "Rebind Remaining"
-        },
-        {
-          "expr": "cm3500_dhcp_lease_total_seconds",
-          "refId": "D",
-          "legendFormat": "Lease Total"
-        }
+        { "expr": "cm3500_dhcp_lease_remaining_seconds", "refId": "A", "legendFormat": "Lease Remaining" },
+        { "expr": "cm3500_dhcp_renew_remaining_seconds", "refId": "B", "legendFormat": "Renew Remaining" },
+        { "expr": "cm3500_dhcp_rebind_remaining_seconds", "refId": "C", "legendFormat": "Rebind Remaining" },
+        { "expr": "cm3500_dhcp_lease_total_seconds", "refId": "D", "legendFormat": "Lease Total" }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": { "drawStyle": "line", "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
       }
     },
+    {
+      "title": "DHCP Renew No Response",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 4, "x": 12, "y": 59 },
+      "targets": [
+        { "expr": "cm3500_event_dhcp_renew_no_response", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      },
+      "description": "Count of DHCP RENEW sent - No response events in the event log. Non-zero may indicate CMTS DHCP provisioning issues."
+    },
+    {
+      "title": "QoS Shaper Capacity",
+      "type": "gauge",
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 59 },
+      "targets": [
+        { "expr": "max(cm3500_qos_max_traffic_rate_kbps{direction=\"Downstream\"})", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kbps",
+          "min": 0,
+          "max": 1300000,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "decimals": 0
+        }
+      },
+      "description": "Maximum downstream QoS traffic rate from the service flow config (shaper ceiling)."
+    },
+    {
+      "title": "Service Flow Rates",
+      "type": "table",
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 59 },
+      "targets": [
+        { "expr": "cm3500_qos_max_traffic_rate_kbps", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Rate (kbps)", "direction": "Direction", "flow_index": "Flow" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } } }
+    },
 
     {
       "title": "Event Log",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
       "collapsed": false
     },
     {
       "title": "Critical Event Counts",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 47 },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 67 },
       "targets": [
         { "expr": "cm3500_event_t3_timeouts", "refId": "A", "instant": true },
         { "expr": "cm3500_event_t4_timeouts", "refId": "B", "instant": true },
         { "expr": "cm3500_event_dhcp_failures", "refId": "C", "instant": true },
         { "expr": "cm3500_event_dhcp_renew_warnings", "refId": "D", "instant": true },
-        { "expr": "cm3500_event_profile_changes", "refId": "E", "instant": true }
+        { "expr": "cm3500_event_profile_changes", "refId": "E", "instant": true },
+        { "expr": "cm3500_event_dhcp_renew_no_response", "refId": "F", "instant": true }
       ],
       "fieldConfig": {
         "overrides": [
@@ -557,21 +583,17 @@
           { "matcher": { "id": "byName", "options": "cm3500_event_t4_timeouts" }, "properties": [ { "id": "displayName", "value": "T4 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
           { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_failures" }, "properties": [ { "id": "displayName", "value": "DHCP Failures" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
           { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_renew_warnings" }, "properties": [ { "id": "displayName", "value": "DHCP Renew Warnings" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } } ] },
-          { "matcher": { "id": "byName", "options": "cm3500_event_profile_changes" }, "properties": [ { "id": "displayName", "value": "Profile Changes" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }] } } ] }
+          { "matcher": { "id": "byName", "options": "cm3500_event_profile_changes" }, "properties": [ { "id": "displayName", "value": "Profile Changes" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_renew_no_response" }, "properties": [ { "id": "displayName", "value": "DHCP No Response" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } } ] }
         ]
       }
     },
     {
       "title": "Event Log Entries by ID",
       "type": "barchart",
-      "gridPos": { "h": 7, "w": 12, "x": 6, "y": 47 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 67 },
       "targets": [
-        {
-          "expr": "cm3500_event_log_entries",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_event_log_entries", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         {
@@ -582,32 +604,21 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "blue" }
-        }
-      },
-      "options": {
-        "xTickLabelRotation": 45,
-        "groupWidth": 0.7,
-        "barWidth": 0.9
-      }
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9 }
     },
     {
       "title": "Event Counts Over Time",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 51 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 67 },
       "targets": [
         { "expr": "cm3500_event_t3_timeouts", "refId": "A", "legendFormat": "T3 Timeouts" },
         { "expr": "cm3500_event_t4_timeouts", "refId": "B", "legendFormat": "T4 Timeouts" },
         { "expr": "cm3500_event_dhcp_failures", "refId": "C", "legendFormat": "DHCP Failures" },
-        { "expr": "cm3500_event_profile_changes", "refId": "D", "legendFormat": "Profile Changes" }
+        { "expr": "cm3500_event_profile_changes", "refId": "D", "legendFormat": "Profile Changes" },
+        { "expr": "cm3500_event_dhcp_renew_no_response", "refId": "E", "legendFormat": "DHCP No Response" }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": { "drawStyle": "line", "fillOpacity": 10 }
-        }
-      },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
@@ -617,20 +628,15 @@
     {
       "title": "DOCSIS State",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 74 },
       "collapsed": false
     },
     {
       "title": "DOCSIS Registration Phases",
       "type": "table",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 59 },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 75 },
       "targets": [
-        {
-          "expr": "cm3500_docsis_phase",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_docsis_phase", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         {
@@ -658,14 +664,9 @@
     {
       "title": "QoS Service Flows",
       "type": "table",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 59 },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 75 },
       "targets": [
-        {
-          "expr": "cm3500_qos_packets_total",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
+        { "expr": "cm3500_qos_packets_total", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         {
@@ -676,9 +677,54 @@
           }
         }
       ],
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } } }
+    },
+
+    {
+      "title": "Collector Health",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 81 },
+      "collapsed": false
+    },
+    {
+      "title": "Scrape Duration Timeline",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 82 },
+      "targets": [
+        { "expr": "cm3500_scrape_duration_seconds", "refId": "A", "legendFormat": "Scrape Duration" }
+      ],
       "fieldConfig": {
-        "defaults": { "custom": { "align": "left" } }
-      }
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 5 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "description": "Modem scrape duration over time. Sudden increases may indicate modem CPU stress, session re-authentication overhead, or network path issues."
+    },
+    {
+      "title": "Product Logging Components",
+      "type": "barchart",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 82 },
+      "targets": [
+        { "expr": "cm3500_product_logging_components_enabled", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Components", "group": "Group" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "super-light-blue" } } },
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9 },
+      "description": "Internal logging component counts by debug group. Useful for firmware diagnostics."
     }
   ],
   "refresh": "30s",
@@ -690,5 +736,5 @@
   "timezone": "",
   "title": "ARRIS CM3500B CE - Cable Modem",
   "uid": "cm3500b-ce",
-  "version": 1
+  "version": 2
 }
