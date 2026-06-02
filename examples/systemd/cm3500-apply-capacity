@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+capacity_file="${CAPACITY_FILE:-/run/cm3500/capacity.json}"
+shaping_env_file="${SHAPING_ENV_FILE:-/run/cm3500/shaping.env}"
+
+if [[ ! -f "$capacity_file" ]]; then
+  echo "capacity file missing: $capacity_file" >&2
+  exit 0
+fi
+
+valid="$(jq -r '.valid // false' "$capacity_file")"
+if [[ "$valid" != "true" ]]; then
+  logger -t cm3500-apply-capacity "capacity file invalid; leaving shaping unchanged"
+  exit 0
+fi
+
+up_bps="$(jq -r '.shaped_upstream_bps // empty' "$capacity_file")"
+down_bps="$(jq -r '.shaped_downstream_bps // empty' "$capacity_file")"
+
+if [[ -z "$up_bps" || -z "$down_bps" ]]; then
+  logger -t cm3500-apply-capacity "missing shaped capacity values; leaving shaping unchanged"
+  exit 0
+fi
+
+mkdir -p "$(dirname "$shaping_env_file")"
+tmp_file="${shaping_env_file}.$$"
+cat >"$tmp_file" <<EOF
+CM3500_UPSTREAM_BPS=${up_bps}
+CM3500_DOWNSTREAM_BPS=${down_bps}
+EOF
+mv "$tmp_file" "$shaping_env_file"
+
+logger -t cm3500-apply-capacity "updated shaping env upstream=${up_bps} downstream=${down_bps}"

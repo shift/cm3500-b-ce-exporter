@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch CM3500 link state for failover automation
+
+[Path]
+PathExists=/run/cm3500/link-state.json
+PathChanged=/run/cm3500/link-state.json
+Unit=cm3500-failover.service
+
+[Install]
+WantedBy=multi-user.target

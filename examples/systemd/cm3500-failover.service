@@ -1,0 +1,11 @@
+[Unit]
+Description=Apply failover policy from CM3500 link state
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=STATE_FILE=/run/cm3500/link-state.json
+Environment=FAILOVER_TO_UNIT=gateway-failover-to-backup.service
+Environment=FAILBACK_TO_UNIT=gateway-failback-to-primary.service
+ExecStart=/usr/local/libexec/cm3500-failover-handler

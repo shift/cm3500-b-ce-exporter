@@ -122,6 +122,8 @@ Example:
 
 Files are written atomically and only rewritten when their semantic content changes, making them suitable for `systemd.path` or other file-watch based automation.
 
+Example systemd integration files are provided in [`examples/systemd/`](examples/systemd/).
+
 ## Scraping Model
 
 The exporter scrapes the modem on a background interval (default: 30s) and serves the last successful result from `/metrics`. This avoids doing a full modem login and multi-page fetch on every Prometheus scrape and keeps scrape latency predictable despite the modem's cookie-based session handling.

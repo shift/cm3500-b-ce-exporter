@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply traffic shaping inputs from CM3500 capacity output
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=CAPACITY_FILE=/run/cm3500/capacity.json
+Environment=SHAPING_ENV_FILE=/run/cm3500/shaping.env
+ExecStart=/usr/local/libexec/cm3500-apply-capacity
