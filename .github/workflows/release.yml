@@ -30,7 +30,7 @@ jobs:
             artifact: cm3500-b-ce-exporter-aarch64-linux-musl
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -41,25 +41,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
       - name: Install musl tools
-        if: contains(matrix.target, 'musl')
+        if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          fi
+
+      - name: Install cross
+        if: startsWith(matrix.target, 'aarch64-')
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          if [[ "${{ matrix.target }}" == aarch64-* ]]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
       - name: Strip binary
         run: strip target/${{ matrix.target }}/release/cm3500-b-ce-exporter || true
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: target/${{ matrix.target }}/release/cm3500-b-ce-exporter
@@ -68,16 +74,16 @@ jobs:
     name: Publish OCI image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -93,11 +99,11 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -107,10 +113,10 @@ jobs:
     needs: [build, container]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -124,7 +130,6 @@ jobs:
             rm cm3500-b-ce-exporter
           done
 
-          # Package Grafana dashboard and Prometheus rules
           cp grafana/dashboard.json release/grafana-dashboard.json
           cp prometheus/alert_rules_common.yml release/prometheus-alert-rules-common.yml
           cp prometheus/alert_rules_eurodocsis.yml release/prometheus-alert-rules-eurodocsis.yml
@@ -137,7 +142,7 @@ jobs:
           sha256sum *.tar.gz *.json *.yml > checksums-sha256.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: release/*
