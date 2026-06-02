@@ -67,13 +67,13 @@ impl OtlpClient {
             "cm3500.exporter.status",
             "Whether the modem scrape was successful",
             "1",
-            vec![f64_dp(1.0, vec![], &now)],
+            vec![f64_dp(1.0, vec![], now)],
         ));
         metrics.push(gauge(
             "cm3500.exporter.scrape.duration",
             "Duration of the last modem scrape",
             "s",
-            vec![f64_dp(data.scrape_duration_secs, vec![], &now)],
+            vec![f64_dp(data.scrape_duration_secs, vec![], now)],
         ));
 
         if let Some(uptime) = data.uptime_seconds {
@@ -81,7 +81,7 @@ impl OtlpClient {
                 "system.uptime",
                 "System uptime",
                 "s",
-                vec![f64_dp(uptime as f64, vec![], &now)],
+                vec![f64_dp(uptime as f64, vec![], now)],
                 counter_start,
                 true,
             ));
@@ -95,7 +95,7 @@ impl OtlpClient {
                 vec![f64_dp(
                     1.0,
                     vec![str_attr("docsis.state", &data.cm_status)],
-                    &now,
+                    now,
                 )],
             ));
         }
@@ -112,7 +112,7 @@ impl OtlpClient {
                         str_attr("network.interface.name", &iface.name),
                         str_attr("network.interface.provisioned", &iface.provisioned),
                     ],
-                    &now,
+                    now,
                 )],
             ));
         }
@@ -125,12 +125,12 @@ impl OtlpClient {
                 f64_dp(
                     data.cpe_static as f64,
                     vec![str_attr("cpe.kind", "static")],
-                    &now,
+                    now,
                 ),
                 f64_dp(
                     data.cpe_dynamic as f64,
                     vec![str_attr("cpe.kind", "dynamic")],
-                    &now,
+                    now,
                 ),
             ],
         ));
@@ -143,7 +143,7 @@ impl OtlpClient {
                 vec![f64_dp(
                     1.0,
                     vec![str_attr("dhcp.state", &data.dhcp_state)],
-                    &now,
+                    now,
                 )],
             ));
         }
@@ -170,7 +170,7 @@ impl OtlpClient {
             ),
         ] {
             if let Some(v) = opt_val {
-                metrics.push(gauge(name, desc, "s", vec![f64_dp(v as f64, vec![], &now)]));
+                metrics.push(gauge(name, desc, "s", vec![f64_dp(v as f64, vec![], now)]));
             }
         }
 
@@ -182,11 +182,11 @@ impl OtlpClient {
 
         for ch in &data.downstream_qam {
             let attrs = downstream_channel_attrs(ch.channel, ch.dcid, ch.freq_mhz, &ch.modulation);
-            ds_power.push(f64_dp(ch.power_dbmv, attrs.clone(), &now));
-            ds_snr.push(f64_dp(ch.snr_db, attrs.clone(), &now));
-            ds_octets.push(i64_dp(ch.octets as i64, attrs.clone(), &now));
-            ds_corrected.push(i64_dp(ch.correcteds as i64, attrs.clone(), &now));
-            ds_uncorrectable.push(i64_dp(ch.uncorrectables as i64, attrs, &now));
+            ds_power.push(f64_dp(ch.power_dbmv, attrs.clone(), now));
+            ds_snr.push(f64_dp(ch.snr_db, attrs.clone(), now));
+            ds_octets.push(i64_dp(ch.octets as i64, attrs.clone(), now));
+            ds_corrected.push(i64_dp(ch.correcteds as i64, attrs.clone(), now));
+            ds_uncorrectable.push(i64_dp(ch.uncorrectables as i64, attrs, now));
         }
 
         if !ds_power.is_empty() {
@@ -240,12 +240,12 @@ impl OtlpClient {
             ds_ofdm_width.push(f64_dp(
                 ch.channel_width_mhz * 1_000_000.0,
                 base_attrs.clone(),
-                &now,
+                now,
             ));
             ds_ofdm_subcarriers.push(f64_dp(
                 ch.active_subcarriers as f64,
                 base_attrs.clone(),
-                &now,
+                now,
             ));
             for (measurement, val) in [
                 ("pilot", ch.rxmer_pilot_db),
@@ -254,7 +254,7 @@ impl OtlpClient {
             ] {
                 let mut attrs = base_attrs.clone();
                 attrs.push(str_attr("cable.ofdm.measurement", measurement));
-                ds_ofdm_rxmer.push(f64_dp(val, attrs, &now));
+                ds_ofdm_rxmer.push(f64_dp(val, attrs, now));
             }
         }
         if !ds_ofdm_width.is_empty() {
@@ -289,8 +289,8 @@ impl OtlpClient {
                 str_attr("cable.channel.kind", "sc_qam"),
                 str_attr("cable.channel.type", &ch.channel_type),
             ];
-            us_power.push(f64_dp(ch.power_dbmv, attrs.clone(), &now));
-            us_sym_rate.push(f64_dp(ch.symbol_rate_ksym * 1000.0, attrs, &now));
+            us_power.push(f64_dp(ch.power_dbmv, attrs.clone(), now));
+            us_sym_rate.push(f64_dp(ch.symbol_rate_ksym * 1000.0, attrs, now));
         }
         if !us_power.is_empty() {
             metrics.push(gauge(
@@ -316,13 +316,13 @@ impl OtlpClient {
                 str_attr("cable.channel.kind", "ofdma"),
                 str_attr("cable.ofdma.fft_type", &ch.fft_type),
             ];
-            us_ofdma_power.push(f64_dp(ch.tx_power_dbmv, attrs.clone(), &now));
+            us_ofdma_power.push(f64_dp(ch.tx_power_dbmv, attrs.clone(), now));
             us_ofdma_width.push(f64_dp(
                 ch.channel_width_mhz * 1_000_000.0,
                 attrs.clone(),
-                &now,
+                now,
             ));
-            us_ofdma_subcarriers.push(f64_dp(ch.active_subcarriers as f64, attrs, &now));
+            us_ofdma_subcarriers.push(f64_dp(ch.active_subcarriers as f64, attrs, now));
         }
         if !us_ofdma_power.is_empty() {
             metrics.push(gauge(
@@ -361,7 +361,7 @@ impl OtlpClient {
                             ),
                             str_attr("cable.qos.service_class", &f.service_class),
                         ],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -383,7 +383,7 @@ impl OtlpClient {
                 vec![f64_dp(
                     1.0,
                     vec![str_attr("docsis.state", &data.cm_state.overall_state)],
-                    &now,
+                    now,
                 )],
             ));
         }
@@ -400,7 +400,7 @@ impl OtlpClient {
                             str_attr("docsis.phase", &phase_normalized),
                             str_attr("docsis.phase.status", &p.status),
                         ],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -419,7 +419,7 @@ impl OtlpClient {
                 vec![f64_dp(
                     1.0,
                     vec![str_attr("docsis.bpi.status", &data.cm_state.bpi_status)],
-                    &now,
+                    now,
                 )],
             ));
         }
@@ -431,7 +431,7 @@ impl OtlpClient {
                 vec![f64_dp(
                     1.0,
                     vec![str_attr("docsis.tod.status", &data.cm_state.tod_status)],
-                    &now,
+                    now,
                 )],
             ));
         }
@@ -447,7 +447,7 @@ impl OtlpClient {
                     f64_dp(
                         *count as f64,
                         vec![str_attr("cable_modem.event.id", id)],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -504,7 +504,7 @@ impl OtlpClient {
                     name,
                     desc,
                     "1",
-                    vec![f64_dp(val as f64, vec![], &now)],
+                    vec![f64_dp(val as f64, vec![], now)],
                 ));
             }
         }
@@ -520,7 +520,7 @@ impl OtlpClient {
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
                         ],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -534,7 +534,7 @@ impl OtlpClient {
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
                         ],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -548,7 +548,7 @@ impl OtlpClient {
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
                         ],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -562,7 +562,7 @@ impl OtlpClient {
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
                         ],
-                        &now,
+                        now,
                     )
                 })
                 .collect();
@@ -1035,7 +1035,7 @@ mod tests {
         let resource_attrs = body["resourceMetrics"][0]["resource"]["attributes"]
             .as_array()
             .unwrap();
-        let mut resource_lines = vec![
+        let mut resource_lines = [
             format!(
                 "service.name={}",
                 attr_value_from_array(resource_attrs, "service.name").unwrap()
