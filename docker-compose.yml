@@ -1,9 +1,9 @@
 services:
   exporter:
     build: .
-    command: ["--password", "${MODEM_PASSWORD}", "--listen", "0.0.0.0:9104", "--modem-url", "https://192.168.100.1"]
+    command: ["--password", "${MODEM_PASSWORD}", "--listen", "0.0.0.0:10044", "--modem-url", "https://192.168.100.1"]
     ports:
-      - "9104:9104"
+      - "10044:10044"
     restart: unless-stopped
 
   prometheus:

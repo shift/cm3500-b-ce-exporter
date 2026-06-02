@@ -12,5 +12,5 @@ rule_files:
 scrape_configs:
   - job_name: "cm3500"
     static_configs:
-      - targets: ["localhost:9104"]
+      - targets: ["localhost:10044"]
     scrape_interval: 30s

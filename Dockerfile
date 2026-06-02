@@ -12,5 +12,5 @@ RUN store_path=$(cat /out-path) && cp ${store_path}/bin/cm3500-b-ce-exporter /cm
 
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /cm3500-b-ce-exporter /cm3500-b-ce-exporter
-EXPOSE 9104
+EXPOSE 10044
 ENTRYPOINT ["/cm3500-b-ce-exporter"]

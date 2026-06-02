@@ -101,6 +101,7 @@ pub struct CmState {
 
 #[derive(Debug, Clone)]
 pub struct EventLogEntry {
+    pub timestamp: String,
     pub event_id: String,
     #[allow(dead_code)]
     pub event_level: u32,
@@ -466,6 +467,7 @@ fn parse_event_log(html: &str) -> Vec<EventLogEntry> {
     re.captures_iter(html)
         .filter_map(|c| {
             Some(EventLogEntry {
+                timestamp: c[1].trim().to_string(),
                 event_id: c[2].to_string(),
                 event_level: c[3].parse().ok()?,
                 description: c[4].trim().to_string(),
@@ -617,6 +619,7 @@ mod tests {
         let html = r#"<td align=center>6/2/2026 7:11</td><td align=center>82000200</td><td align=center>3</td><td align=left>No Ranging Response received - T3 time-out;CM-MAC=aa:bb:cc:dd:ee:ff</td>"#;
         let events = parse_event_log(html);
         assert_eq!(events.len(), 1);
+        assert_eq!(events[0].timestamp, "6/2/2026 7:11");
         assert_eq!(events[0].event_id, "82000200");
         assert_eq!(events[0].event_level, 3);
         assert!(events[0].description.contains("T3 time-out"));

@@ -58,7 +58,7 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_cpe_static 0"));
     assert!(output.contains("cm3500_interface_up{"));
     assert!(output.contains("cm3500_event_log_entries{"));
-    assert!(output.contains("cm3500_event_t3_timeout_total"));
+    assert!(output.contains("cm3500_event_t3_timeouts"));
     assert!(output.contains("cm3500_docsis_state{"));
     assert!(output.contains("cm3500_bpi_state{"));
     assert!(output.contains("cm3500_tod_state{"));

@@ -1,6 +1,6 @@
 use cm3500_b_ce_exporter::{client, metrics, otlp, parser};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,14 +26,18 @@ struct Args {
     password: String,
 
     /// Listen address for the Prometheus metrics server
-    #[arg(long, default_value = "0.0.0.0:9104")]
+    #[arg(long, default_value = "0.0.0.0:10044")]
     listen: String,
+
+    /// Disable the Prometheus /metrics HTTP endpoint entirely
+    #[arg(long)]
+    disable_prometheus: bool,
 
     /// Scrape interval in seconds
     #[arg(long, default_value_t = 30)]
     interval: u64,
 
-    /// OTLP HTTP endpoint to push metrics to (e.g. https://otlp-gateway-eu-west-0.grafana.net/otlp)
+    /// OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
     #[arg(long)]
     otlp_endpoint: Option<String>,
 
@@ -52,6 +56,10 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+
+    if args.disable_prometheus && args.otlp_endpoint.is_none() {
+        bail!("--disable-prometheus requires --otlp-endpoint");
+    }
 
     let client = client::ModemClient::new(&args.modem_url, &args.username, &args.password)?;
 
@@ -119,21 +127,25 @@ async fn main() -> Result<()> {
         })
     };
 
-    // HTTP server
-    let app = axum::Router::new()
-        .route("/metrics", axum::routing::get(metrics_handler))
-        .route("/health", axum::routing::get(health_handler))
-        .route("/", axum::routing::get(health_handler))
-        .with_state(metrics_text);
+    if args.disable_prometheus {
+        tracing::info!("Prometheus HTTP endpoint disabled");
+        scrape_handle.await?;
+    } else {
+        let app = axum::Router::new()
+            .route("/metrics", axum::routing::get(metrics_handler))
+            .route("/health", axum::routing::get(health_handler))
+            .route("/", axum::routing::get(landing_handler))
+            .with_state(metrics_text);
 
-    let listener = tokio::net::TcpListener::bind(&args.listen).await?;
-    tracing::info!("Listening on {}", args.listen);
+        let listener = tokio::net::TcpListener::bind(&args.listen).await?;
+        tracing::info!("Listening on {}", args.listen);
 
-    let server_handle = axum::serve(listener, app);
+        let server_handle = axum::serve(listener, app);
 
-    tokio::select! {
-        r = server_handle => r?,
-        r = scrape_handle => r?,
+        tokio::select! {
+            r = server_handle => r?,
+            r = scrape_handle => r?,
+        }
     }
 
     Ok(())
@@ -205,4 +217,13 @@ async fn metrics_handler(
 
 async fn health_handler() -> &'static str {
     "OK"
+}
+
+async fn landing_handler() -> axum::response::Html<&'static str> {
+    axum::response::Html(
+        "<!DOCTYPE html><html><head><title>ARRIS CM3500B CE Exporter</title></head>\
+         <body><h1>ARRIS CM3500B CE Prometheus Exporter</h1>\
+         <p><a href=\"/metrics\">Metrics</a> | <a href=\"/health\">Health</a></p>\
+         </body></html>",
+    )
 }

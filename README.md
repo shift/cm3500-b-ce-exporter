@@ -22,7 +22,7 @@ MODEM_PASSWORD=YOUR_PASSWORD docker compose up -d
 ```
 
 This starts the exporter, Prometheus, and Grafana with the dashboard pre-loaded:
-- Exporter: http://localhost:9104/metrics
+- Exporter: http://localhost:10044/metrics
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000 (admin/admin)
 
@@ -35,16 +35,17 @@ Options:
   --modem-url <URL>         Modem base URL [default: https://192.168.100.1]
   --username <USER>         Login username [default: admin]
   --password <PASS>         Login password (required)
-  --listen <ADDR>           Listen address [default: 0.0.0.0:9104]
+  --listen <ADDR>           Listen address [default: 0.0.0.0:10044]
+  --disable-prometheus      Disable the Prometheus /metrics HTTP endpoint entirely
   --interval <SECONDS>      Scrape interval [default: 30]
 
-  --otlp-endpoint <URL>     OTLP HTTP endpoint to push metrics to
+  --otlp-endpoint <URL>     OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
   --otlp-header <KEY=VALUE> OTLP header, can be repeated (e.g. Authorization=Basic...)
 ```
 
 ### OTLP Push (Grafana Cloud)
 
-Push metrics directly to Grafana Cloud without running Prometheus:
+Push metrics and modem event logs directly to Grafana Cloud without running Prometheus:
 
 ```bash
 cm3500-b-ce-exporter \
@@ -61,7 +62,20 @@ cm3500-b-ce-exporter \
   --otlp-endpoint http://localhost:4318/v1/metrics
 ```
 
-Both Prometheus `/metrics` and OTLP push can run simultaneously.
+To run in OTLP-only mode without binding any HTTP port:
+
+```bash
+cm3500-b-ce-exporter \
+  --password YOUR_PASSWORD \
+  --otlp-endpoint http://localhost:4318/v1/metrics \
+  --disable-prometheus
+```
+
+Both Prometheus `/metrics` and OTLP push can run simultaneously. If `--otlp-endpoint` points at an OTLP base URL like `https://.../otlp`, the exporter sends metrics to `/v1/metrics` and logs to `/v1/logs` under that base. When `--disable-prometheus` is set, the exporter does not bind any HTTP port.
+
+## Scraping Model
+
+The exporter scrapes the modem on a background interval (default: 30s) and serves the last successful result from `/metrics`. This avoids doing a full modem login and multi-page fetch on every Prometheus scrape and keeps scrape latency predictable despite the modem's cookie-based session handling.
 
 ## Metrics Exposed
 
@@ -104,7 +118,7 @@ Both Prometheus `/metrics` and OTLP push can run simultaneously.
 |--------|------|--------|-------------|
 | `cm3500_downstream_ofdm_channel_width_mhz` | gauge | channel, fft_type | Channel width in MHz |
 | `cm3500_downstream_ofdm_active_subcarriers` | gauge | channel | Number of active subcarriers |
-| `cm3500_downstream_ofdm_rxmer_db` | gauge | channel, type (pilot/plc/data) | Receive MER in dB |
+| `cm3500_downstream_ofdm_rxmer_db` | gauge | channel, measurement (pilot/plc/data) | Receive MER in dB |
 
 ### Upstream SC-QAM
 
@@ -136,11 +150,11 @@ Both Prometheus `/metrics` and OTLP push can run simultaneously.
 | Metric | Type | Description |
 |--------|------|-------------|
 | `cm3500_event_log_entries` | gauge | Entry count in the event log by event ID |
-| `cm3500_event_t3_timeout_total` | gauge | T3 timeouts (No Ranging Response) in event log |
-| `cm3500_event_t4_timeout_total` | gauge | T4 timeouts in event log |
-| `cm3500_event_dhcp_failure_total` | gauge | DHCP failures in event log |
-| `cm3500_event_dhcp_renew_warning_total` | gauge | DHCP renew warnings in event log |
-| `cm3500_event_profile_change_total` | gauge | Upstream profile assignment changes |
+| `cm3500_event_t3_timeouts` | gauge | T3 timeouts (No Ranging Response) in event log |
+| `cm3500_event_t4_timeouts` | gauge | T4 timeouts in event log |
+| `cm3500_event_dhcp_failures` | gauge | DHCP failures in event log |
+| `cm3500_event_dhcp_renew_warnings` | gauge | DHCP renew warnings in event log |
+| `cm3500_event_profile_changes` | gauge | Upstream profile assignment changes |
 
 ### QoS Configuration (from config_params_cgi)
 
@@ -243,7 +257,7 @@ The dashboard (`grafana/dashboard.json`) contains the following sections:
 scrape_configs:
   - job_name: 'cm3500'
     static_configs:
-      - targets: ['localhost:9104']
+      - targets: ['localhost:10044']
     scrape_interval: 30s
 
 rule_files:
@@ -251,16 +265,26 @@ rule_files:
   - "alert_rules_eurodocsis.yml"  # or alert_rules_docsis_us.yml
 ```
 
+## Testing
+
+The test suite includes fixture-based OTLP snapshot tests for both metrics and modem event logs.
+
+Snapshot files:
+- `tests/fixtures/otlp_metrics_snapshot.txt`
+- `tests/fixtures/otlp_logs_snapshot.txt`
+
+If OTLP output changes intentionally, run the test suite, inspect the assertion diff, update the snapshot files, and rerun tests.
+
 ## Project Structure
 
 ```
 cm3500-b-ce-exporter/
 ├── src/
-│   ├── main.rs              # CLI, HTTP server, background scraper
+│   ├── main.rs              # CLI, HTTP server, background scraper/cache
 │   ├── client.rs            # Modem HTTP client (cookie auth, auto re-login)
 │   ├── parser.rs            # HTML parsing for all endpoints
 │   ├── metrics.rs           # Prometheus text format rendering
-│   └── otlp.rs              # OTLP/HTTP JSON push exporter
+│   └── otlp.rs              # OTLP/HTTP JSON push for metrics and event logs
 ├── grafana/
 │   ├── dashboard.json       # Pre-built Grafana dashboard
 │   └── provisioning/        # Auto-provisioning configs

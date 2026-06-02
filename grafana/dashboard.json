@@ -545,19 +545,19 @@
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 47 },
       "targets": [
-        { "expr": "cm3500_event_t3_timeout_total", "refId": "A", "instant": true },
-        { "expr": "cm3500_event_t4_timeout_total", "refId": "B", "instant": true },
-        { "expr": "cm3500_event_dhcp_failure_total", "refId": "C", "instant": true },
-        { "expr": "cm3500_event_dhcp_renew_warning_total", "refId": "D", "instant": true },
-        { "expr": "cm3500_event_profile_change_total", "refId": "E", "instant": true }
+        { "expr": "cm3500_event_t3_timeouts", "refId": "A", "instant": true },
+        { "expr": "cm3500_event_t4_timeouts", "refId": "B", "instant": true },
+        { "expr": "cm3500_event_dhcp_failures", "refId": "C", "instant": true },
+        { "expr": "cm3500_event_dhcp_renew_warnings", "refId": "D", "instant": true },
+        { "expr": "cm3500_event_profile_changes", "refId": "E", "instant": true }
       ],
       "fieldConfig": {
         "overrides": [
-          { "matcher": { "id": "byName", "options": "cm3500_event_t3_timeout_total" }, "properties": [ { "id": "displayName", "value": "T3 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
-          { "matcher": { "id": "byName", "options": "cm3500_event_t4_timeout_total" }, "properties": [ { "id": "displayName", "value": "T4 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
-          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_failure_total" }, "properties": [ { "id": "displayName", "value": "DHCP Failures" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
-          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_renew_warning_total" }, "properties": [ { "id": "displayName", "value": "DHCP Renew Warnings" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } } ] },
-          { "matcher": { "id": "byName", "options": "cm3500_event_profile_change_total" }, "properties": [ { "id": "displayName", "value": "Profile Changes" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }] } } ] }
+          { "matcher": { "id": "byName", "options": "cm3500_event_t3_timeouts" }, "properties": [ { "id": "displayName", "value": "T3 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_t4_timeouts" }, "properties": [ { "id": "displayName", "value": "T4 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_failures" }, "properties": [ { "id": "displayName", "value": "DHCP Failures" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_renew_warnings" }, "properties": [ { "id": "displayName", "value": "DHCP Renew Warnings" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_profile_changes" }, "properties": [ { "id": "displayName", "value": "Profile Changes" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }] } } ] }
         ]
       }
     },
@@ -598,10 +598,10 @@
       "type": "timeseries",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 51 },
       "targets": [
-        { "expr": "cm3500_event_t3_timeout_total", "refId": "A", "legendFormat": "T3 Timeouts" },
-        { "expr": "cm3500_event_t4_timeout_total", "refId": "B", "legendFormat": "T4 Timeouts" },
-        { "expr": "cm3500_event_dhcp_failure_total", "refId": "C", "legendFormat": "DHCP Failures" },
-        { "expr": "cm3500_event_profile_change_total", "refId": "D", "legendFormat": "Profile Changes" }
+        { "expr": "cm3500_event_t3_timeouts", "refId": "A", "legendFormat": "T3 Timeouts" },
+        { "expr": "cm3500_event_t4_timeouts", "refId": "B", "legendFormat": "T4 Timeouts" },
+        { "expr": "cm3500_event_dhcp_failures", "refId": "C", "legendFormat": "DHCP Failures" },
+        { "expr": "cm3500_event_profile_changes", "refId": "D", "legendFormat": "Profile Changes" }
       ],
       "fieldConfig": {
         "defaults": {

@@ -46,9 +46,9 @@ groups:
           summary: "CM3500 interface {{ $labels.name }} is down"
           description: "Interface {{ $labels.name }} (MAC: {{ $labels.mac_address }}) is not in Up state."
 
-      # Event counters: use increase() to detect new occurrences
+      # Event log gauges: detect changes in the rolling log over time
       - alert: CM3500T3Timeouts
-        expr: increase(cm3500_event_t3_timeout_total[10m]) > 0
+        expr: changes(cm3500_event_t3_timeouts[10m]) > 0
         for: 0m
         labels:
           severity: warning
@@ -57,7 +57,7 @@ groups:
           description: "{{ $value }} T3 (No Ranging Response) timeout events in the last 10 minutes. This indicates upstream communication problems with the CMTS."
 
       - alert: CM3500T4Timeouts
-        expr: increase(cm3500_event_t4_timeout_total[10m]) > 0
+        expr: changes(cm3500_event_t4_timeouts[10m]) > 0
         for: 0m
         labels:
           severity: warning
@@ -66,7 +66,7 @@ groups:
           description: "{{ $value }} T4 timeout events in the last 10 minutes."
 
       - alert: CM3500DHCPFailures
-        expr: increase(cm3500_event_dhcp_failure_total[10m]) > 0
+        expr: changes(cm3500_event_dhcp_failures[10m]) > 0
         for: 0m
         labels:
           severity: warning
@@ -75,7 +75,7 @@ groups:
           description: "{{ $value }} DHCP failure events in the last 10 minutes."
 
       - alert: CM3500DHCPRenewWarnings
-        expr: increase(cm3500_event_dhcp_renew_warning_total[10m]) > 5
+        expr: delta(cm3500_event_dhcp_renew_warnings[10m]) > 5
         for: 2m
         labels:
           severity: warning
@@ -84,7 +84,7 @@ groups:
           description: "{{ $value }} DHCP RENEW WARNING events in the last 10 minutes. May indicate CMTS or DHCP server issues."
 
       - alert: CM3500ProfileChanges
-        expr: increase(cm3500_event_profile_change_total[10m]) > 0
+        expr: changes(cm3500_event_profile_changes[10m]) > 0
         for: 0m
         labels:
           severity: info
@@ -134,7 +134,7 @@ groups:
 
       # OFDM downstream (DOCSIS 3.1 LDPC holds down to ~27 dB)
       - alert: CM3500OFDMRxMERLow
-        expr: cm3500_downstream_ofdm_rxmer_db{type="data"} < 31
+        expr: cm3500_downstream_ofdm_rxmer_db{measurement="data"} < 31
         for: 5m
         labels:
           severity: warning
@@ -143,7 +143,7 @@ groups:
           description: "Downstream OFDM data RxMER on channel {{ $labels.channel }} is {{ $value }} dB. Profile degradation may be occurring."
 
       - alert: CM3500OFDMRxMERCritical
-        expr: cm3500_downstream_ofdm_rxmer_db{type="data"} < 25
+        expr: cm3500_downstream_ofdm_rxmer_db{measurement="data"} < 25
         for: 5m
         labels:
           severity: critical

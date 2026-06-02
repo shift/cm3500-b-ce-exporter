@@ -228,7 +228,7 @@ fn render_downstream_ofdm(out: &mut String, channels: &[crate::parser::Downstrea
             gauge(
                 out,
                 "cm3500_downstream_ofdm_rxmer_db",
-                &[("channel", &ch.channel.to_string()), ("type", typ)],
+                &[("channel", &ch.channel.to_string()), ("measurement", typ)],
                 val,
             );
         }
@@ -509,36 +509,36 @@ fn render_event_log(out: &mut String, events: &[crate::parser::EventLogEntry]) {
 
     metric(
         out,
-        "cm3500_event_t3_timeout_total",
-        "Total T3 timeouts (No Ranging Response) in event log",
+        "cm3500_event_t3_timeouts",
+        "T3 timeouts (No Ranging Response) in event log",
         "gauge",
         &t3_timeouts.to_string(),
     );
     metric(
         out,
-        "cm3500_event_t4_timeout_total",
-        "Total T4 timeouts in event log",
+        "cm3500_event_t4_timeouts",
+        "T4 timeouts in event log",
         "gauge",
         &t4_timeouts.to_string(),
     );
     metric(
         out,
-        "cm3500_event_dhcp_failure_total",
-        "Total DHCP failures in event log",
+        "cm3500_event_dhcp_failures",
+        "DHCP failures in event log",
         "gauge",
         &dhcp_failures.to_string(),
     );
     metric(
         out,
-        "cm3500_event_dhcp_renew_warning_total",
-        "Total DHCP renew warnings in event log",
+        "cm3500_event_dhcp_renew_warnings",
+        "DHCP renew warnings in event log",
         "gauge",
         &dhcp_renew_warnings.to_string(),
     );
     metric(
         out,
-        "cm3500_event_profile_change_total",
-        "Total upstream profile assignment changes in event log",
+        "cm3500_event_profile_changes",
+        "Upstream profile assignment changes in event log",
         "gauge",
         &profile_changes.to_string(),
     );
