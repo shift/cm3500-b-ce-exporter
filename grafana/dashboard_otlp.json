@@ -1,0 +1,722 @@
+{
+  "annotations": { "list": [] },
+  "description": "ARRIS CM3500B CE cable modem — OTLP / OpenTelemetry metric names",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Overview",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "title": "Exporter Status",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 0, "y": 1 },
+      "targets": [
+        { "expr": "cm3500_exporter_status", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "title": "DOCSIS Status",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 3, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_docsis_status", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true }, "renameByName": {} } }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "docsis_state" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 6, "y": 1 },
+      "targets": [
+        { "expr": "system_uptime", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 300 }, { "color": "green", "value": 3600 }] }
+        }
+      }
+    },
+    {
+      "title": "DHCP Lease Remaining",
+      "type": "gauge",
+      "gridPos": { "h": 3, "w": 3, "x": 9, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_provisioning_dhcp_lease_remaining", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 600,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 120 }, { "color": "green", "value": 300 }] }
+        }
+      }
+    },
+    {
+      "title": "DHCP State",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 12, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_provisioning_dhcp_status", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true } } }
+      ]
+    },
+    {
+      "title": "BPI State",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 14, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_docsis_bpi_status", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true } } }
+      ]
+    },
+    {
+      "title": "CPE Count",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 16, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_cpe_detected", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "title": "Scrape Duration",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 18, "y": 1 },
+      "targets": [
+        { "expr": "cm3500_exporter_scrape_duration", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 5 }] }
+        }
+      }
+    },
+    {
+      "title": "Ethernet PHY",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 20, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_ethernet_phy_info", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true } } }
+      ]
+    },
+    {
+      "title": "Registration State",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 22, "y": 1 },
+      "targets": [
+        { "expr": "hw_cable_modem_docsis_registration_status", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true } } }
+      ]
+    },
+
+    {
+      "title": "Downstream SC-QAM",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+      "collapsed": false
+    },
+    {
+      "title": "Downstream Power Level",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "expr": "hw_cable_modem_downstream_power{cable_channel_kind=\"sc_qam\"}",
+          "refId": "A",
+          "legendFormat": "Ch{{cable_channel_id}} DCID{{cable_channel_dcid}} {{cable_channel_frequency_mhz}}MHz {{cable_channel_modulation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 10, "showPoints": "auto" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": -7 },
+              { "color": "green", "value": -5 },
+              { "color": "green", "value": 10 },
+              { "color": "orange", "value": 12 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min", "max"] }
+      }
+    },
+    {
+      "title": "Downstream SNR",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        {
+          "expr": "hw_cable_modem_downstream_snr",
+          "refId": "A",
+          "legendFormat": "Ch{{cable_channel_id}} DCID{{cable_channel_dcid}} {{cable_channel_frequency_mhz}}MHz {{cable_channel_modulation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dB",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear", "fillOpacity": 10, "showPoints": "auto" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 30 }, { "color": "green", "value": 33 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min"] }
+      }
+    },
+    {
+      "title": "Corrected Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 },
+      "targets": [
+        { "expr": "increase(hw_cable_modem_downstream_errors_corrected_count[5m])", "refId": "A", "legendFormat": "Ch{{cable_channel_id}} DCID{{cable_channel_dcid}}" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 50 } } },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"] }
+      }
+    },
+    {
+      "title": "Uncorrectable Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 },
+      "targets": [
+        { "expr": "increase(hw_cable_modem_downstream_errors_uncorrectable_count[5m])", "refId": "A", "legendFormat": "Ch{{cable_channel_id}} DCID{{cable_channel_dcid}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 50 }, "color": { "mode": "fixed", "fixedColor": "red" } }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"] }
+      }
+    },
+    {
+      "title": "DS Power Tilt (Bar Chart)",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 },
+      "targets": [
+        { "expr": "hw_cable_modem_downstream_power{cable_channel_kind=\"sc_qam\"}", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Power (dBmV)", "cable_channel_frequency_mhz": "Freq (MHz)" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": -7 }, { "color": "green", "value": 10 }, { "color": "red", "value": 12 }] }
+        }
+      },
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9, "stacking": "none" }
+    },
+
+    {
+      "title": "Downstream OFDM",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "collapsed": false
+    },
+    {
+      "title": "OFDM RxMER",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
+      "targets": [
+        { "expr": "hw_cable_modem_downstream_ofdm_rx_mer", "refId": "A", "legendFormat": "Ch{{cable_channel_id}} {{cable_ofdm_measurement}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dB",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 25 }, { "color": "green", "value": 31 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "title": "OFDM Channel Details",
+      "type": "table",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
+      "targets": [
+        { "expr": "hw_cable_modem_downstream_ofdm_subcarriers_active", "refId": "A", "instant": true, "format": "table" },
+        { "expr": "hw_cable_modem_downstream_ofdm_channel_width / 1000000", "refId": "B", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value #A": "Active Subcarriers", "Value #B": "Width (MHz)", "cable_channel_id": "Channel", "cable_ofdm_fft_type": "FFT Type" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } } }
+    },
+
+    {
+      "title": "Upstream",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "collapsed": false
+    },
+    {
+      "title": "Upstream Power Level (SC-QAM + OFDMA)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "targets": [
+        { "expr": "hw_cable_modem_upstream_power", "refId": "A", "legendFormat": "Ch{{cable_channel_id}} {{cable_channel_kind}} {{cable_channel_modulation}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "showPoints": "auto" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 49 }, { "color": "red", "value": 53 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min", "max"] }
+      }
+    },
+    {
+      "title": "Upstream Power Delta (Tilt)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 12, "y": 30 },
+      "targets": [
+        { "expr": "max(hw_cable_modem_upstream_power{cable_channel_kind=\"sc_qam\"}) - min(hw_cable_modem_upstream_power{cable_channel_kind=\"sc_qam\"})", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "min": 0,
+          "max": 15,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "orange", "value": 6 }, { "color": "red", "value": 10 }] },
+          "decimals": 1
+        }
+      },
+      "description": "Max - Min upstream SC-QAM power across all channels. High tilt indicates frequency-dependent attenuation on the coax drop."
+    },
+    {
+      "title": "Upstream Active Profile",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 30 },
+      "targets": [
+        { "expr": "hw_cable_modem_upstream_profile_active", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": { "decimals": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }
+      },
+      "description": "Last seen upstream profile ID from event log. Profile downgrades indicate upstream noise ingress."
+    },
+    {
+      "title": "OFDMA Profile ID",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 30 },
+      "targets": [
+        { "expr": "hw_cable_modem_upstream_ofdma_profile_active", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": { "decimals": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] } }
+      },
+      "description": "Last seen OFDM/OFDMA profile ID from CM-STATUS events."
+    },
+    {
+      "title": "Upstream Symbol Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 34 },
+      "targets": [
+        { "expr": "hw_cable_modem_upstream_symbol_rate / 1000", "refId": "A", "legendFormat": "Ch{{cable_channel_id}} UCID{{cable_channel_ucid}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "kSym/s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+
+    {
+      "title": "RF Spectrum",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "collapsed": true
+    },
+    {
+      "title": "Spectrum Analyzer (Full Band)",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 39 },
+      "targets": [
+        { "expr": "hw_cable_modem_spectrum_bin_power{cm3500_spectrum_chunk=\"0\"}", "refId": "A", "legendFormat": "{{cable_spectrum_frequency}} Hz" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15, "lineWidth": 1, "showPoints": "never" },
+          "color": { "mode": "continuous-GrYlRd" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "hidden" }
+      },
+      "description": "Per-bin spectrum power from the modem's active scan."
+    },
+    {
+      "title": "Spectrum Chunk Power Summary",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 49 },
+      "targets": [
+        { "expr": "hw_cable_modem_spectrum_chunk_power{cable_spectrum_stat=\"min\"}", "refId": "A", "legendFormat": "{{cm3500_spectrum_chunk}} min" },
+        { "expr": "hw_cable_modem_spectrum_chunk_power{cable_spectrum_stat=\"avg\"}", "refId": "B", "legendFormat": "{{cm3500_spectrum_chunk}} avg" },
+        { "expr": "hw_cable_modem_spectrum_chunk_power{cable_spectrum_stat=\"max\"}", "refId": "C", "legendFormat": "{{cm3500_spectrum_chunk}} max" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 1 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "description": "Min/avg/max power per 7.5 MHz chunk across the full downstream spectrum."
+    },
+    {
+      "title": "Spectrum Chunks Count",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 49 },
+      "targets": [
+        { "expr": "hw_cable_modem_spectrum_chunks", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "decimals": 0 }
+      },
+      "description": "Number of 7.5 MHz chunks returned by the last spectrum scan."
+    },
+    {
+      "title": "Product Logging Components",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 49 },
+      "targets": [
+        { "expr": "hw_cable_modem_product_logging_components_enabled", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Components", "cm3500_product_logging_group": "Group" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "super-light-blue" } } },
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9 }
+    },
+
+    {
+      "title": "DHCP & Lease",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
+      "collapsed": false
+    },
+    {
+      "title": "DHCP Timers",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 59 },
+      "targets": [
+        { "expr": "hw_cable_modem_provisioning_dhcp_lease_remaining", "refId": "A", "legendFormat": "Lease Remaining" },
+        { "expr": "hw_cable_modem_provisioning_dhcp_renew_remaining", "refId": "B", "legendFormat": "Renew Remaining" },
+        { "expr": "hw_cable_modem_provisioning_dhcp_rebind_remaining", "refId": "C", "legendFormat": "Rebind Remaining" },
+        { "expr": "hw_cable_modem_provisioning_dhcp_lease_duration", "refId": "D", "legendFormat": "Lease Total" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "title": "DHCP Renew No Response",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 4, "x": 12, "y": 59 },
+      "targets": [
+        { "expr": "hw_cable_modem_provisioning_dhcp_renew_no_response_count", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      },
+      "description": "Count of DHCP RENEW sent - No response events."
+    },
+    {
+      "title": "QoS Shaper Capacity (Downstream)",
+      "type": "gauge",
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 59 },
+      "targets": [
+        { "expr": "max(hw_cable_modem_qos_max_traffic_rate{cable_qos_direction=\"Downstream\"})", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0,
+          "max": 1300000000,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "decimals": 0
+        }
+      },
+      "description": "Maximum downstream QoS traffic rate from the service flow config."
+    },
+    {
+      "title": "Service Flow Rates",
+      "type": "table",
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 59 },
+      "targets": [
+        { "expr": "hw_cable_modem_qos_max_traffic_rate", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Rate (bps)", "cable_qos_direction": "Direction", "cable_qos_flow_index": "Flow" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } } }
+    },
+
+    {
+      "title": "Event Log",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+      "collapsed": false
+    },
+    {
+      "title": "Critical Event Counts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 67 },
+      "targets": [
+        { "expr": "hw_cable_modem_cmts_t3_timeouts_count", "refId": "A", "instant": true },
+        { "expr": "hw_cable_modem_cmts_t4_timeouts_count", "refId": "B", "instant": true },
+        { "expr": "hw_cable_modem_provisioning_dhcp_failures_count", "refId": "C", "instant": true },
+        { "expr": "hw_cable_modem_provisioning_dhcp_renew_warnings_count", "refId": "D", "instant": true },
+        { "expr": "hw_cable_modem_upstream_profile_changes_count", "refId": "E", "instant": true },
+        { "expr": "hw_cable_modem_provisioning_dhcp_renew_no_response_count", "refId": "F", "instant": true }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "hw_cable_modem_cmts_t3_timeouts_count" }, "properties": [ { "id": "displayName", "value": "T3 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "hw_cable_modem_cmts_t4_timeouts_count" }, "properties": [ { "id": "displayName", "value": "T4 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "hw_cable_modem_provisioning_dhcp_failures_count" }, "properties": [ { "id": "displayName", "value": "DHCP Failures" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "hw_cable_modem_provisioning_dhcp_renew_warnings_count" }, "properties": [ { "id": "displayName", "value": "DHCP Renew Warnings" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } } ] },
+          { "matcher": { "id": "byName", "options": "hw_cable_modem_upstream_profile_changes_count" }, "properties": [ { "id": "displayName", "value": "Profile Changes" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }] } } ] },
+          { "matcher": { "id": "byName", "options": "hw_cable_modem_provisioning_dhcp_renew_no_response_count" }, "properties": [ { "id": "displayName", "value": "DHCP No Response" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } } ] }
+        ]
+      }
+    },
+    {
+      "title": "Event Log Entries by ID",
+      "type": "barchart",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 67 },
+      "targets": [
+        { "expr": "hw_cable_modem_event_log_entries", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Count", "cable_modem_event_id": "Event ID" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9 }
+    },
+    {
+      "title": "Event Counts Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 67 },
+      "targets": [
+        { "expr": "hw_cable_modem_cmts_t3_timeouts_count", "refId": "A", "legendFormat": "T3 Timeouts" },
+        { "expr": "hw_cable_modem_cmts_t4_timeouts_count", "refId": "B", "legendFormat": "T4 Timeouts" },
+        { "expr": "hw_cable_modem_provisioning_dhcp_failures_count", "refId": "C", "legendFormat": "DHCP Failures" },
+        { "expr": "hw_cable_modem_upstream_profile_changes_count", "refId": "D", "legendFormat": "Profile Changes" },
+        { "expr": "hw_cable_modem_provisioning_dhcp_renew_no_response_count", "refId": "E", "legendFormat": "DHCP No Response" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+
+    {
+      "title": "DOCSIS State",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 74 },
+      "collapsed": false
+    },
+    {
+      "title": "DOCSIS Registration Phases",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 75 },
+      "targets": [
+        { "expr": "hw_cable_modem_docsis_phase_status", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true },
+            "renameByName": { "docsis_phase": "Phase", "docsis_phase_status": "Status" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "custom.align", "value": "center" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "QoS Service Flows",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 75 },
+      "targets": [
+        { "expr": "hw_cable_modem_qos_packets_count", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Packets", "cable_qos_sfid": "SFID", "cable_qos_direction": "Direction", "cable_qos_primary": "Primary", "cable_qos_service_class": "Service Class" }
+          }
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } } }
+    },
+
+    {
+      "title": "Collector Health",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 81 },
+      "collapsed": false
+    },
+    {
+      "title": "Scrape Duration Timeline",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 82 },
+      "targets": [
+        { "expr": "cm3500_exporter_scrape_duration", "refId": "A", "legendFormat": "Scrape Duration" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 5 }] }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "description": "Modem scrape duration over time."
+    },
+    {
+      "title": "Interface Status",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 82 },
+      "targets": [
+        { "expr": "system_network_interface_status", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true }, "renameByName": { "network_interface_name": "Interface", "network_interface_provisioned": "Provisioned" } } }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Interface" }, "properties": [ { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } } ] }
+        ]
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["arris", "cm3500", "docsis", "cable-modem", "otlp"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ARRIS CM3500B CE - OTLP Metrics",
+  "uid": "cm3500b-ce-otlp",
+  "version": 1
+}

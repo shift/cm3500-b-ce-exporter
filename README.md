@@ -258,10 +258,21 @@ The exporter scrapes the modem on a background interval (default: 30s) and serve
 
 ## Alerting Rules
 
-Rules are split into three files. Always load `alert_rules_common.yml`, then choose **one** plant-specific file:
+Two sets of alert rules and dashboards are provided:
+
+| Set | Dashboard | Alert rules | Use when |
+|-----|-----------|-------------|----------|
+| **Prometheus** | `grafana/dashboard.json` | `alert_rules_common.yml` + plant-specific | Scraping `/metrics` directly with Prometheus |
+| **OTLP** | `grafana/dashboard_otlp.json` | `alert_rules_otlp.yml` | Pushing via OTLP to an OTel Collector → Prometheus backend |
+
+### Prometheus Rules
+
+Always load `alert_rules_common.yml`, then choose **one** plant-specific file:
 
 - `alert_rules_eurodocsis.yml` — Vodafone DE, Liberty Global, Virgin Media O2, etc.
 - `alert_rules_docsis_us.yml` — Comcast, Spectrum, Cox, etc.
+
+#### Common Rules (`alert_rules_common.yml`)
 
 ### Common Rules (`alert_rules_common.yml`)
 
@@ -285,6 +296,10 @@ Apply to all deployments regardless of plant type:
 | `CM3500DHCPLeaseExpiring` | warning | Lease remaining < 60s for 2m |
 | `CM3500OFDMRxMERLow` | warning | OFDM data RxMER < 31 dB |
 | `CM3500OFDMRxMERCritical` | critical | OFDM data RxMER < 25 dB |
+| `CM3500DHCPRenewNoResponse` | warning | DHCP renew no-response events increasing |
+| `CM3500UpstreamProfileDowngraded` | warning | Upstream profile ID decreased over 30m |
+| `CM3500UpstreamPowerHigh` | warning | Upstream OFDMA power > 49 dBmV |
+| `CM3500UpstreamPowerDeltaHigh` | warning | Upstream SC-QAM tilt > 6 dBmV |
 
 ### EuroDOCSIS Rules (`alert_rules_eurodocsis.yml`)
 
@@ -297,8 +312,10 @@ For European cable plants. Key thresholds:
 |-------|----------|----------|
 | `CM3500EuroDownstreamPowerLow` | warning | DS power < -5 dBmV for 5m |
 | `CM3500EuroDownstreamPowerHigh` | warning | DS power > +12 dBmV for 5m |
-| `CM3500EuroUpstreamPowerHigh` | warning | US power > 49 dBmV for 5m |
-| `CM3500EuroUpstreamPowerCritical` | critical | US power > 53 dBmV for 5m |
+| `CM3500EuroUpstreamPowerHigh` | warning | US SC-QAM power > 49 dBmV for 5m |
+| `CM3500EuroUpstreamPowerCritical` | critical | US SC-QAM power > 53 dBmV for 5m |
+| `CM3500EuroUpstreamOFDMAHigh` | warning | US OFDMA power > 49 dBmV for 5m |
+| `CM3500EuroUpstreamOFDMACritical` | critical | US OFDMA power > 53 dBmV for 5m |
 
 ### US DOCSIS Rules (`alert_rules_docsis_us.yml`)
 
@@ -311,18 +328,38 @@ For North American cable plants. Key thresholds:
 |-------|----------|----------|
 | `CM3500USDownstreamPowerLow` | warning | DS power < -7 dBmV for 5m |
 | `CM3500USDownstreamPowerHigh` | warning | DS power > +12 dBmV for 5m |
-| `CM3500USUpstreamPowerHigh` | warning | US power > 51 dBmV for 5m |
-| `CM3500USUpstreamPowerCritical` | critical | US power > 55 dBmV for 5m |
+| `CM3500USUpstreamPowerHigh` | warning | US SC-QAM power > 51 dBmV for 5m |
+| `CM3500USUpstreamPowerCritical` | critical | US SC-QAM power > 55 dBmV for 5m |
+| `CM3500USUpstreamOFDMAHigh` | warning | US OFDMA power > 51 dBmV for 5m |
+| `CM3500USUpstreamOFDMACritical` | critical | US OFDMA power > 55 dBmV for 5m |
 
-The dashboard (`grafana/dashboard.json`) contains the following sections:
+### Grafana Dashboards
 
-- **Overview** — Status, uptime, DHCP lease gauge, BPI state, CPE count, modem info table
-- **Downstream SC-QAM** — Power level timeseries with DOCSIS thresholds, SNR timeseries, corrected/uncorrectable error bars, power bar chart
+#### Prometheus Dashboard (`grafana/dashboard.json`)
+
+Sections:
+
+- **Overview** — Status, uptime, DHCP lease gauge, BPI state, CPE count, Ethernet PHY, scrape duration, modem info
+- **Downstream SC-QAM** — Power timeseries with DOCSIS thresholds, SNR timeseries, corrected/uncorrectable error bars, power tilt bar chart
 - **Downstream OFDM** — RxMER timeseries (pilot/plc/data), channel details table
-- **Upstream** — Power level timeseries (QAM + OFDMA) with thresholds, symbol rate
-- **DHCP & Lease** — Lease/renew/rebind timers over time
-- **Event Log** — Critical event stat panels, event count bar chart by ID, event trends
-- **DOCSIS State** — Registration phases table, QoS service flow table
+- **Upstream** — Power timeseries (QAM + OFDMA), power delta/tilt gauge, active profile, OFDMA profile ID, symbol rate
+- **RF Spectrum** — Full-band spectrum analyzer, chunk power summary, product logging components
+- **DHCP & Lease** — Lease/renew/rebind timers, DHCP renew no-response, QoS shaper gauge, service flow table
+- **Event Log** — Critical event stats, event bar chart by ID, event trends over time
+- **DOCSIS State** — Registration phases, QoS service flows
+- **Collector Health** — Scrape duration timeline
+
+#### OTLP Dashboard (`grafana/dashboard_otlp.json`)
+
+Same panels and sections as the Prometheus dashboard, but uses OTLP metric names (e.g. `hw_cable_modem_downstream_power` instead of `cm3500_downstream_qam_power_dbmv`) and OTLP attribute labels (e.g. `cable_channel_id` instead of `channel`, `cable_channel_kind` for SC-QAM vs OFDMA).
+
+Use this dashboard when the exporter pushes metrics via OTLP to an OTel Collector that writes to a Prometheus-compatible backend (Grafana Mimir, Thanos, Cortex).
+
+### OTLP Alert Rules (`alert_rules_otlp.yml`)
+
+A single combined file with all three groups (common + EuroDOCSIS + US DOCSIS) using OTLP metric names. All alert names are suffixed with `[OTLP]` in their summary to distinguish them from Prometheus-native alerts.
+
+Load this file **instead of** the three Prometheus rule files when using an OTLP pipeline.
 
 ## Prometheus Configuration
 
@@ -359,15 +396,17 @@ cm3500-b-ce-exporter/
 │   ├── metrics.rs           # Prometheus text format rendering
 │   └── otlp.rs              # OTLP/HTTP JSON push for metrics and event logs
 ├── grafana/
-│   ├── dashboard.json       # Pre-built Grafana dashboard
-│   └── provisioning/        # Auto-provisioning configs
+│   ├── dashboard.json           # Grafana dashboard (Prometheus metric names)
+│   ├── dashboard_otlp.json      # Grafana dashboard (OTLP/OpenTelemetry metric names)
+│   └── provisioning/            # Auto-provisioning configs
 │       ├── dashboards/
 │       └── datasources/
 ├── prometheus/
 │   ├── prometheus.yml               # Prometheus config
 │   ├── alert_rules_common.yml      # Common alerts (all regions)
 │   ├── alert_rules_eurodocsis.yml   # EuroDOCSIS power thresholds
-│   └── alert_rules_docsis_us.yml   # US DOCSIS power thresholds
+│   ├── alert_rules_docsis_us.yml   # US DOCSIS power thresholds
+│   └── alert_rules_otlp.yml        # OTLP metric name alerts (all regions combined)
 ├── flake.nix                # Nix dev shell
 ├── Cargo.toml
 ├── Dockerfile

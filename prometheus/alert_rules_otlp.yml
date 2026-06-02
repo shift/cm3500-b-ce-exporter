@@ -1,0 +1,333 @@
+# Alert rules for OTLP/OpenTelemetry metric names
+# Use these when the exporter pushes metrics via OTLP to an OTel Collector
+# which then writes to a Prometheus-compatible backend (Mimir, Thanos, Cortex).
+#
+# OTLP metric names use dots; Prometheus backends convert dots to underscores.
+# OTLP attribute keys also use dots; backends convert to underscores.
+# e.g. "hw.cable_modem.downstream.power" → "hw_cable_modem_downstream_power"
+#       cable.channel.id → cable_channel_id
+#
+# NOTE: The exact label name mangling depends on your OTel Collector config
+# (e.g. prometheusremotewrite exporter vs. prometheusexporter). Adjust
+# label names to match your pipeline if they differ.
+
+groups:
+  - name: cm3500.otlp.rules
+    rules:
+      - alert: CM3500OtlpModemDown
+        expr: cm3500_exporter_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 modem scrape failing (OTLP)"
+          description: "Prometheus has been unable to scrape the CM3500 exporter for 2 minutes."
+
+      - alert: CM3500OtlpScrapeSlow
+        expr: cm3500_exporter_scrape_duration > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CM3500 scrape is slow ({{ $value | printf \"%.1f\" }}s) [OTLP]"
+          description: "The modem scrape is taking longer than 5 seconds."
+
+      - alert: CM3500OtlpRebooted
+        expr: system_uptime < system_uptime offset 5m
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "CM3500 modem rebooted (OTLP)"
+          description: "The modem uptime has decreased, indicating a reboot occurred."
+
+      - alert: CM3500OtlpNotOperational
+        expr: hw_cable_modem_docsis_status{docsis_state!="OPERATIONAL"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 modem status is {{ $labels.docsis_state }} (OTLP)"
+          description: "The modem is not in OPERATIONAL status. Current status: {{ $labels.docsis_state }}."
+
+      - alert: CM3500OtlpInterfaceDown
+        expr: system_network_interface_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 interface {{ $labels.network_interface_name }} is down (OTLP)"
+          description: "Interface {{ $labels.network_interface_name }} is not in Up state."
+
+      # Event log alerts
+      - alert: CM3500OtlpT3Timeouts
+        expr: changes(hw_cable_modem_cmts_t3_timeouts_count[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "T3 timeouts detected ({{ $value }} in last 10m) [OTLP]"
+          description: "{{ $value }} T3 (No Ranging Response) timeout events in the last 10 minutes."
+
+      - alert: CM3500OtlpT4Timeouts
+        expr: changes(hw_cable_modem_cmts_t4_timeouts_count[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "T4 timeouts detected ({{ $value }} in last 10m) [OTLP]"
+          description: "{{ $value }} T4 timeout events in the last 10 minutes."
+
+      - alert: CM3500OtlpDHCPFailures
+        expr: changes(hw_cable_modem_provisioning_dhcp_failures_count[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DHCP failures detected ({{ $value }} in last 10m) [OTLP]"
+          description: "{{ $value }} DHCP failure events in the last 10 minutes."
+
+      - alert: CM3500OtlpDHCPRenewWarnings
+        expr: delta(hw_cable_modem_provisioning_dhcp_renew_warnings_count[10m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent DHCP renew warnings ({{ $value }} in last 10m) [OTLP]"
+          description: "{{ $value }} DHCP RENEW WARNING events in the last 10 minutes."
+
+      - alert: CM3500OtlpDHCPRenewNoResponse
+        expr: changes(hw_cable_modem_provisioning_dhcp_renew_no_response_count[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DHCP renew sent with no response ({{ $value }} in last 10m) [OTLP]"
+          description: "{{ $value }} DHCP RENEW sent - No response events in the last 10 minutes."
+
+      - alert: CM3500OtlpProfileChanges
+        expr: changes(hw_cable_modem_upstream_profile_changes_count[10m]) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "US profile assignment changes ({{ $value }} in last 10m) [OTLP]"
+          description: "{{ $value }} upstream OFDMA profile assignment changes in the last 10 minutes."
+
+      - alert: CM3500OtlpUpstreamProfileDowngraded
+        expr: hw_cable_modem_upstream_profile_active < on(cable_channel_id) hw_cable_modem_upstream_profile_active offset 30m
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Upstream profile downgraded on channel {{ $labels.cable_channel_id }} (OTLP)"
+          description: "Upstream profile on channel {{ $labels.cable_channel_id }} has decreased, suggesting upstream noise ingress."
+
+      - alert: CM3500OtlpDHCPLeaseExpiring
+        expr: hw_cable_modem_provisioning_dhcp_lease_remaining < 60
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DHCP lease almost expired ({{ $value }}s remaining) [OTLP]"
+          description: "The modem's DHCP lease has less than 60 seconds remaining."
+
+      # Downstream errors
+      - alert: CM3500OtlpUncorrectableErrors
+        expr: increase(hw_cable_modem_downstream_errors_uncorrectable_count[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uncorrectable FEC errors on channel {{ $labels.cable_channel_id }} (OTLP)"
+          description: "{{ $value }} uncorrectable FEC errors in the last 5 minutes on channel {{ $labels.cable_channel_id }}."
+
+      # SNR
+      - alert: CM3500OtlpDownstreamSNRLow
+        expr: hw_cable_modem_downstream_snr < 33
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low downstream SNR on channel {{ $labels.cable_channel_id }} (OTLP)"
+          description: "Downstream SNR on channel {{ $labels.cable_channel_id }} is {{ $value | printf \"%.1f\" }} dB."
+
+      - alert: CM3500OtlpDownstreamSNRCritical
+        expr: |
+          (hw_cable_modem_downstream_snr{cable_channel_modulation="64QAM"} < 23)
+          or
+          (hw_cable_modem_downstream_snr{cable_channel_modulation="256QAM"} < 30)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical downstream SNR on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dB) [OTLP]"
+          description: "Downstream SNR critically low at {{ $value | printf \"%.1f\" }} dB."
+
+      # OFDM RxMER
+      - alert: CM3500OtlpOFDMRxMERLow
+        expr: hw_cable_modem_downstream_ofdm_rx_mer{cable_ofdm_measurement="data"} < 31
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low OFDM RxMER on downstream channel {{ $labels.cable_channel_id }} (OTLP)"
+          description: "Downstream OFDM data RxMER on channel {{ $labels.cable_channel_id }} is {{ $value }} dB."
+
+      - alert: CM3500OtlpOFDMRxMERCritical
+        expr: hw_cable_modem_downstream_ofdm_rx_mer{cable_ofdm_measurement="data"} < 25
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical OFDM RxMER on channel {{ $labels.cable_channel_id }} ({{ $value }} dB) [OTLP]"
+          description: "Downstream OFDM data RxMER critically low at {{ $value }} dB."
+
+      # Upstream power (unified: SC-QAM + OFDMA via cable_channel_kind label)
+      - alert: CM3500OtlpUpstreamPowerHigh
+        expr: hw_cable_modem_upstream_power > 49
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High upstream power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream transmit power on channel {{ $labels.cable_channel_id }} ({{ $labels.cable_channel_kind }}) is {{ $value | printf \"%.1f\" }} dBmV."
+
+      - alert: CM3500OtlpUpstreamPowerDeltaHigh
+        expr: max(hw_cable_modem_upstream_power{cable_channel_kind="sc_qam"}) - min(hw_cable_modem_upstream_power{cable_channel_kind="sc_qam"}) > 6
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High upstream power tilt ({{ $value | printf \"%.1f\" }} dBmV across channels) [OTLP]"
+          description: "The delta between highest and lowest upstream SC-QAM transmit power exceeds 6 dBmV."
+
+  # EuroDOCSIS OTLP alerts
+  - name: cm3500.otlp.eurodocsis
+    rules:
+      - alert: CM3500OtlpEuroDownstreamPowerLow
+        expr: hw_cable_modem_downstream_power < -5
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "Low downstream power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Downstream power on channel {{ $labels.cable_channel_id }} is {{ $value | printf \"%.1f\" }} dBmV (EuroDOCSIS threshold: -5 dBmV)."
+
+      - alert: CM3500OtlpEuroDownstreamPowerHigh
+        expr: hw_cable_modem_downstream_power > 12
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "High downstream power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Downstream power on channel {{ $labels.cable_channel_id }} is {{ $value | printf \"%.1f\" }} dBmV (EuroDOCSIS threshold: +12 dBmV)."
+
+      # Upstream SC-QAM
+      - alert: CM3500OtlpEuroUpstreamPowerHigh
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="sc_qam"} > 49
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "High upstream SC-QAM power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream SC-QAM transmit power near EuroDOCSIS maximum."
+
+      - alert: CM3500OtlpEuroUpstreamPowerCritical
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="sc_qam"} > 53
+        for: 5m
+        labels:
+          severity: critical
+          plant: eurodocsis
+        annotations:
+          summary: "Critical upstream SC-QAM power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream SC-QAM transmit power at or above EuroDOCSIS maximum."
+
+      # Upstream OFDMA
+      - alert: CM3500OtlpEuroUpstreamOFDMAHigh
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="ofdma"} > 49
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "High upstream OFDMA power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream OFDMA transmit power near EuroDOCSIS maximum."
+
+      - alert: CM3500OtlpEuroUpstreamOFDMACritical
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="ofdma"} > 53
+        for: 5m
+        labels:
+          severity: critical
+          plant: eurodocsis
+        annotations:
+          summary: "Critical upstream OFDMA power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream OFDMA transmit power at or above EuroDOCSIS maximum."
+
+  # US DOCSIS OTLP alerts
+  - name: cm3500.otlp.docsis_us
+    rules:
+      - alert: CM3500OtlpUSDownstreamPowerLow
+        expr: hw_cable_modem_downstream_power < -7
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "Low downstream power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Downstream power below US DOCSIS operating window."
+
+      - alert: CM3500OtlpUSDownstreamPowerHigh
+        expr: hw_cable_modem_downstream_power > 12
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "High downstream power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Downstream power above threshold."
+
+      # Upstream SC-QAM
+      - alert: CM3500OtlpUSUpstreamPowerHigh
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="sc_qam"} > 51
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "High upstream SC-QAM power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream SC-QAM transmit power near US bonded-channel maximum."
+
+      - alert: CM3500OtlpUSUpstreamPowerCritical
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="sc_qam"} > 55
+        for: 5m
+        labels:
+          severity: critical
+          plant: docsis_us
+        annotations:
+          summary: "Critical upstream SC-QAM power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream SC-QAM transmit power exceeds bonded-channel maximum."
+
+      # Upstream OFDMA
+      - alert: CM3500OtlpUSUpstreamOFDMAHigh
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="ofdma"} > 51
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "High upstream OFDMA power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream OFDMA transmit power near US bonded-channel maximum."
+
+      - alert: CM3500OtlpUSUpstreamOFDMACritical
+        expr: hw_cable_modem_upstream_power{cable_channel_kind="ofdma"} > 55
+        for: 5m
+        labels:
+          severity: critical
+          plant: docsis_us
+        annotations:
+          summary: "Critical upstream OFDMA power on channel {{ $labels.cable_channel_id }} ({{ $value | printf \"%.1f\" }} dBmV) [OTLP]"
+          description: "Upstream OFDMA transmit power exceeds bonded-channel maximum."
