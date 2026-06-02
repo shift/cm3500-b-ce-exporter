@@ -1,0 +1,55 @@
+# EuroDOCSIS alert thresholds
+# Suitable for Vodafone DE, Liberty Global, Virgin Media O2, etc.
+# Key differences from US DOCSIS:
+#   - Higher upstream warning: EuroDOCSIS allows up to 51-54 dBmV per channel
+#     but Vodafone DE plants start degrading past 50 dBmV
+#   - Tighter downstream low-power: -5 dBmV vs -7 dBmV due to European
+#     plant tilt characteristics and dBuV outlet specs (56-73 dBuV)
+
+groups:
+  - name: cm3500.eurodocsis
+    rules:
+      # Downstream power: EuroDOCSIS -5 dBmV lower bound
+      # (56 dBuV outlet minimum ≈ -4 dBmV; -5 gives early warning)
+      - alert: CM3500EuroDownstreamPowerLow
+        expr: cm3500_downstream_qam_power_dbmv < -5
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "Low downstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Downstream SC-QAM power on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz is {{ $value | printf \"%.1f\" }} dBmV (EuroDOCSIS threshold: -5 dBmV). Check plant tilt and outlet levels (spec: 56-73 dBuV)."
+
+      # Downstream power: +12 dBmV upper bound (73 dBuV ≈ +13 dBmV)
+      - alert: CM3500EuroDownstreamPowerHigh
+        expr: cm3500_downstream_qam_power_dbmv > 12
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "High downstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Downstream SC-QAM power on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz is {{ $value | printf \"%.1f\" }} dBmV (EuroDOCSIS threshold: +12 dBmV). May exceed outlet specification."
+
+      # Upstream: EuroDOCSIS 4-channel bonding typically maxes at 51-54 dBmV
+      # Vodafone DE plants degrade past 50 dBmV
+      - alert: CM3500EuroUpstreamPowerHigh
+        expr: cm3500_upstream_qam_power_dbmv > 49
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "High upstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream transmit power on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz is {{ $value | printf \"%.1f\" }} dBmV. Near EuroDOCSIS maximum for bonded channels. Likely indicates return path attenuation."
+
+      - alert: CM3500EuroUpstreamPowerCritical
+        expr: cm3500_upstream_qam_power_dbmv > 53
+        for: 5m
+        labels:
+          severity: critical
+          plant: eurodocsis
+        annotations:
+          summary: "Critical upstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. At or above EuroDOCSIS maximum transmit level. Connectivity loss is likely."

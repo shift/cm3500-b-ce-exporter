@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  # Common rules (always load)
+  - "alert_rules_common.yml"
+  # Choose ONE of the following based on your plant type:
+  - "alert_rules_eurodocsis.yml"
+  # - "alert_rules_docsis_us.yml"
+
+scrape_configs:
+  - job_name: "cm3500"
+    static_configs:
+      - targets: ["localhost:9104"]
+    scrape_interval: 30s

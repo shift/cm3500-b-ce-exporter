@@ -1,0 +1,152 @@
+groups:
+  - name: cm3500.rules
+    rules:
+      - alert: CM3500ModemDown
+        expr: cm3500_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 modem scrape failing"
+          description: "Prometheus has been unable to scrape the CM3500 exporter for 2 minutes."
+
+      - alert: CM3500ScrapeSlow
+        expr: cm3500_scrape_duration_seconds > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CM3500 scrape is slow ({{ $value | printf \"%.1f\" }}s)"
+          description: "The modem scrape is taking longer than 5 seconds."
+
+      - alert: CM3500Rebooted
+        expr: cm3500_uptime_seconds < cm3500_uptime_seconds offset 5m
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "CM3500 modem rebooted"
+          description: "The modem uptime has decreased, indicating a reboot occurred."
+
+      - alert: CM3500NotOperational
+        expr: cm3500_cm_status{status!="OPERATIONAL"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 modem status is {{ $labels.status }}"
+          description: "The modem is not in OPERATIONAL status. Current status: {{ $labels.status }}."
+
+      - alert: CM3500InterfaceDown
+        expr: cm3500_interface_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 interface {{ $labels.name }} is down"
+          description: "Interface {{ $labels.name }} (MAC: {{ $labels.mac_address }}) is not in Up state."
+
+      # Event counters: use increase() to detect new occurrences
+      - alert: CM3500T3Timeouts
+        expr: increase(cm3500_event_t3_timeout_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "T3 timeouts detected ({{ $value }} in last 10m)"
+          description: "{{ $value }} T3 (No Ranging Response) timeout events in the last 10 minutes. This indicates upstream communication problems with the CMTS."
+
+      - alert: CM3500T4Timeouts
+        expr: increase(cm3500_event_t4_timeout_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "T4 timeouts detected ({{ $value }} in last 10m)"
+          description: "{{ $value }} T4 timeout events in the last 10 minutes."
+
+      - alert: CM3500DHCPFailures
+        expr: increase(cm3500_event_dhcp_failure_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DHCP failures detected ({{ $value }} in last 10m)"
+          description: "{{ $value }} DHCP failure events in the last 10 minutes."
+
+      - alert: CM3500DHCPRenewWarnings
+        expr: increase(cm3500_event_dhcp_renew_warning_total[10m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent DHCP renew warnings ({{ $value }} in last 10m)"
+          description: "{{ $value }} DHCP RENEW WARNING events in the last 10 minutes. May indicate CMTS or DHCP server issues."
+
+      - alert: CM3500ProfileChanges
+        expr: increase(cm3500_event_profile_change_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "US profile assignment changes ({{ $value }} in last 10m)"
+          description: "{{ $value }} upstream OFDMA profile assignment changes in the last 10 minutes."
+
+      - alert: CM3500DHCPLeaseExpiring
+        expr: cm3500_dhcp_lease_remaining_seconds < 60
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DHCP lease almost expired ({{ $value }}s remaining)"
+          description: "The modem's DHCP lease has less than 60 seconds remaining and may not be renewing properly."
+
+      - alert: CM3500UncorrectableErrors
+        expr: increase(cm3500_downstream_qam_uncorrectable_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uncorrectable FEC errors on channel {{ $labels.channel }} (DCID {{ $labels.dcid }})"
+          description: "{{ $value }} uncorrectable FEC errors detected in the last 5 minutes on channel {{ $labels.channel }}."
+
+      # SNR (applies to both regions, thresholds per modulation)
+      - alert: CM3500DownstreamSNRLow
+        expr: cm3500_downstream_qam_snr_db < 33
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low downstream SNR on channel {{ $labels.channel }} (DCID {{ $labels.dcid }})"
+          description: "Downstream SNR on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz ({{ $labels.modulation }}) is {{ $value | printf \"%.1f\" }} dB."
+
+      - alert: CM3500DownstreamSNRCritical
+        expr: |
+          (cm3500_downstream_qam_snr_db{modulation="64QAM"} < 23)
+          or
+          (cm3500_downstream_qam_snr_db{modulation="256QAM"} < 30)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical downstream SNR on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dB)"
+          description: "Downstream SNR on channel {{ $labels.channel }} is critically low at {{ $value | printf \"%.1f\" }} dB. Service degradation is likely."
+
+      # OFDM downstream (DOCSIS 3.1 LDPC holds down to ~27 dB)
+      - alert: CM3500OFDMRxMERLow
+        expr: cm3500_downstream_ofdm_rxmer_db{type="data"} < 31
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low OFDM RxMER on downstream channel {{ $labels.channel }}"
+          description: "Downstream OFDM data RxMER on channel {{ $labels.channel }} is {{ $value }} dB. Profile degradation may be occurring."
+
+      - alert: CM3500OFDMRxMERCritical
+        expr: cm3500_downstream_ofdm_rxmer_db{type="data"} < 25
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical OFDM RxMER on downstream channel {{ $labels.channel }} ({{ $value }} dB)"
+          description: "Downstream OFDM data RxMER on channel {{ $labels.channel }} is critically low at {{ $value }} dB. PLC lock loss is imminent."

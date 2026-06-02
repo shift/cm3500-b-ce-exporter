@@ -1,0 +1,694 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "ARRIS CM3500B CE cable modem DOCSIS 3.1 exporter dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Overview",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "title": "Modem Status",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_up",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "title": "CM Status",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 3, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_cm_status",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "filterable": false }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true }, "renameByName": {} } }
+      ]
+    },
+    {
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 3, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_uptime_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 300 }, { "color": "green", "value": 3600 }] }
+        }
+      }
+    },
+    {
+      "title": "DHCP Lease Remaining",
+      "type": "gauge",
+      "gridPos": { "h": 3, "w": 3, "x": 9, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_dhcp_lease_remaining_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 600,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 120 }, { "color": "green", "value": 300 }] }
+        }
+      }
+    },
+    {
+      "title": "DHCP State",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_dhcp_state",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true } } }
+      ]
+    },
+    {
+      "title": "BPI State",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 14, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_bpi_state",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true } } }
+      ]
+    },
+    {
+      "title": "Dynamic CPE",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_cpe_dynamic",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "title": "Scrape Duration",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 2, "x": 18, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_scrape_duration_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 5 }] }
+        }
+      }
+    },
+    {
+      "title": "Modem Info",
+      "type": "table",
+      "gridPos": { "h": 3, "w": 4, "x": 20, "y": 1 },
+      "targets": [
+        {
+          "expr": "cm3500_info",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true }, "renameByName": {} } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": false } },
+        "overrides": []
+      }
+    },
+
+    {
+      "title": "Downstream SC-QAM",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+      "collapsed": false
+    },
+    {
+      "title": "Downstream Power Level",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "expr": "cm3500_downstream_qam_power_dbmv",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} DCID{{dcid}} {{frequency_mhz}}MHz {{modulation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": -7 },
+              { "color": "green", "value": -5 },
+              { "color": "green", "value": 10 },
+              { "color": "orange", "value": 12 }
+            ]
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byFrameRefID", "options": "B" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } } ] },
+          { "matcher": { "id": "byFrameRefID", "options": "C" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } } ] }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min", "max"] }
+      }
+    },
+    {
+      "title": "Downstream SNR",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        {
+          "expr": "cm3500_downstream_qam_snr_db",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} DCID{{dcid}} {{frequency_mhz}}MHz {{modulation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dB",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "pointSize": 5,
+            "showPoints": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 30 },
+              { "color": "green", "value": 33 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min"] }
+      }
+    },
+    {
+      "title": "Corrected Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "expr": "increase(cm3500_downstream_qam_corrected_total[5m])",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} DCID{{dcid}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 50 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"] }
+      }
+    },
+    {
+      "title": "Uncorrectable Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 },
+      "targets": [
+        {
+          "expr": "increase(cm3500_downstream_qam_uncorrectable_total[5m])",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} DCID{{dcid}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 50 },
+          "color": { "mode": "fixed", "fixedColor": "red" }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "sum"] }
+      }
+    },
+    {
+      "title": "DS Power Bar Chart",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 },
+      "targets": [
+        {
+          "expr": "cm3500_downstream_qam_power_dbmv",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Power (dBmV)", "frequency_mhz": "Freq (MHz)" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": -7 },
+              { "color": "green", "value": 10 },
+              { "color": "red", "value": 12 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "xTickLabelRotation": 45,
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "stacking": "none"
+      }
+    },
+
+    {
+      "title": "Downstream OFDM",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "collapsed": false
+    },
+    {
+      "title": "OFDM RxMER",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
+      "targets": [
+        {
+          "expr": "cm3500_downstream_ofdm_rxmer_db",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} {{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dB",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 25 },
+              { "color": "green", "value": 31 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "title": "OFDM Channel Details",
+      "type": "table",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
+      "targets": [
+        {
+          "expr": "cm3500_downstream_ofdm_active_subcarriers",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "cm3500_downstream_ofdm_channel_width_mhz",
+          "refId": "B",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value #A": "Active Subcarriers", "Value #B": "Width (MHz)", "channel": "Channel", "fft_type": "FFT Type" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } }
+      }
+    },
+
+    {
+      "title": "Upstream",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "collapsed": false
+    },
+    {
+      "title": "Upstream Power Level",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "targets": [
+        {
+          "expr": "cm3500_upstream_qam_power_dbmv",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} UCID{{ucid}} {{frequency_mhz}}MHz {{modulation}}"
+        },
+        {
+          "expr": "cm3500_upstream_ofdma_tx_power_dbmv",
+          "refId": "B",
+          "legendFormat": "OFDMA Ch{{channel}} {{fft_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBmV",
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "showPoints": "auto" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 49 },
+              { "color": "red", "value": 53 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min", "max"] }
+      }
+    },
+    {
+      "title": "Upstream Symbol Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "targets": [
+        {
+          "expr": "cm3500_upstream_qam_symbol_rate_ksym",
+          "refId": "A",
+          "legendFormat": "Ch{{channel}} UCID{{ucid}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kSym/s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+
+    {
+      "title": "DHCP & Lease",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "collapsed": false
+    },
+    {
+      "title": "DHCP Timers",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 39 },
+      "targets": [
+        {
+          "expr": "cm3500_dhcp_lease_remaining_seconds",
+          "refId": "A",
+          "legendFormat": "Lease Remaining"
+        },
+        {
+          "expr": "cm3500_dhcp_renew_remaining_seconds",
+          "refId": "B",
+          "legendFormat": "Renew Remaining"
+        },
+        {
+          "expr": "cm3500_dhcp_rebind_remaining_seconds",
+          "refId": "C",
+          "legendFormat": "Rebind Remaining"
+        },
+        {
+          "expr": "cm3500_dhcp_lease_total_seconds",
+          "refId": "D",
+          "legendFormat": "Lease Total"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+
+    {
+      "title": "Event Log",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "collapsed": false
+    },
+    {
+      "title": "Critical Event Counts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 47 },
+      "targets": [
+        { "expr": "cm3500_event_t3_timeout_total", "refId": "A", "instant": true },
+        { "expr": "cm3500_event_t4_timeout_total", "refId": "B", "instant": true },
+        { "expr": "cm3500_event_dhcp_failure_total", "refId": "C", "instant": true },
+        { "expr": "cm3500_event_dhcp_renew_warning_total", "refId": "D", "instant": true },
+        { "expr": "cm3500_event_profile_change_total", "refId": "E", "instant": true }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "cm3500_event_t3_timeout_total" }, "properties": [ { "id": "displayName", "value": "T3 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_t4_timeout_total" }, "properties": [ { "id": "displayName", "value": "T4 Timeouts" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_failure_total" }, "properties": [ { "id": "displayName", "value": "DHCP Failures" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_dhcp_renew_warning_total" }, "properties": [ { "id": "displayName", "value": "DHCP Renew Warnings" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } } ] },
+          { "matcher": { "id": "byName", "options": "cm3500_event_profile_change_total" }, "properties": [ { "id": "displayName", "value": "Profile Changes" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }] } } ] }
+        ]
+      }
+    },
+    {
+      "title": "Event Log Entries by ID",
+      "type": "barchart",
+      "gridPos": { "h": 7, "w": 12, "x": 6, "y": 47 },
+      "targets": [
+        {
+          "expr": "cm3500_event_log_entries",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Count", "event_id": "Event ID" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      },
+      "options": {
+        "xTickLabelRotation": 45,
+        "groupWidth": 0.7,
+        "barWidth": 0.9
+      }
+    },
+    {
+      "title": "Event Counts Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 51 },
+      "targets": [
+        { "expr": "cm3500_event_t3_timeout_total", "refId": "A", "legendFormat": "T3 Timeouts" },
+        { "expr": "cm3500_event_t4_timeout_total", "refId": "B", "legendFormat": "T4 Timeouts" },
+        { "expr": "cm3500_event_dhcp_failure_total", "refId": "C", "legendFormat": "DHCP Failures" },
+        { "expr": "cm3500_event_profile_change_total", "refId": "D", "legendFormat": "Profile Changes" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      }
+    },
+
+    {
+      "title": "DOCSIS State",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
+      "collapsed": false
+    },
+    {
+      "title": "DOCSIS Registration Phases",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 59 },
+      "targets": [
+        {
+          "expr": "cm3500_docsis_phase",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "Value": true, "job": true, "instance": true },
+            "renameByName": { "phase": "Phase", "status": "Status" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+              { "id": "custom.align", "value": "center" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "QoS Service Flows",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 59 },
+      "targets": [
+        {
+          "expr": "cm3500_qos_packets_total",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Packets", "sfid": "SFID", "direction": "Direction", "primary": "Primary", "service_class": "Service Class" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["arris", "cm3500", "docsis", "cable-modem"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ARRIS CM3500B CE - Cable Modem",
+  "uid": "cm3500b-ce",
+  "version": 1
+}

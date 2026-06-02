@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: cm3500-b-ce-exporter-x86_64-linux
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: cm3500-b-ce-exporter-aarch64-linux
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: cm3500-b-ce-exporter-x86_64-linux-musl
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: cm3500-b-ce-exporter-aarch64-linux-musl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Strip binary
+        run: strip target/${{ matrix.target }}/release/cm3500-b-ce-exporter || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/cm3500-b-ce-exporter
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release archives
+        run: |
+          mkdir -p release
+          for dir in artifacts/cm3500-*; do
+            name=$(basename "$dir")
+            cp "$dir/cm3500-b-ce-exporter" "cm3500-b-ce-exporter"
+            tar czf "release/${name}.tar.gz" -C . cm3500-b-ce-exporter
+            rm cm3500-b-ce-exporter
+          done
+
+          # Package Grafana dashboard and Prometheus rules
+          cp grafana/dashboard.json release/grafana-dashboard.json
+          cp prometheus/alert_rules_common.yml release/prometheus-alert-rules-common.yml
+          cp prometheus/alert_rules_eurodocsis.yml release/prometheus-alert-rules-eurodocsis.yml
+          cp prometheus/alert_rules_docsis_us.yml release/prometheus-alert-rules-docsis-us.yml
+          tar czf release/grafana-dashboards-and-alerts.tar.gz -C grafana dashboard.json -C ../prometheus alert_rules_common.yml alert_rules_eurodocsis.yml alert_rules_docsis_us.yml
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum *.tar.gz *.json *.yml > checksums-sha256.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*

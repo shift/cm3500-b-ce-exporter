@@ -1,0 +1,139 @@
+<!DOCTYPE HTML PUBLIC
+"-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+	<title>Configuration Parameters</title>
+	<meta http-equiv="Pragma" content="no-cache">
+        <script type="text/javascript" src="/validation.js"></script>
+    <link rel="stylesheet" href="/arris_style.css">
+</head>
+
+<body class="CM3500" onload="onPageLoad()">
+<div class="wrapper">
+
+	<div class="header">
+	<div class="header_text">
+          <h1>CM Configuration</h1>
+          <a href="logout_cgi">Logout</a>
+	</div>
+	</div>
+
+	<div id="navbar">
+	<ul>
+	<li><a style="width: 16.66%; font-size: 90%;" href="product_cgi">Product</a></li>
+<li><a style="width: 16.66%; font-size: 90%;" href="dhcp_cgi">DHCP</a></li>
+<li><a style="width: 16.66%; font-size: 90%;" href="qos_cgi">QoS</a></li>
+<li id="current"><a style="width: 16.66%; font-size: 90%;" href="config_params_cgi">Config Params</a></li>
+<li><a style="width: 16.66%; font-size: 90%;" href="spectrum_cgi">SPECTRUM</a></li>
+<li><a style="width: 16.66%; font-size: 90%;" href="status_cgi">Basic</a></li>
+
+	</ul>
+	</div>
+
+	<div class="main_body">
+	<p>
+	<!-- INSERT ARRIS PAGE CONTENT HERE -->
+
+    <table>
+          <tr valign="top"><td>CM Config File:</td><td>tftp://10.0.0.1/f820d279cca5_918212ae502da62b2f058f2d065a51a9.cm</td></tr>
+          <?MTA_CONFIG_FILE>
+        <table width="770"><tr><td>
+                    <font size="+2" color="red">Warning:</font> The modem does not store copies of its configuration files. Below
+                            you will find the currently used values of parameters commonly set using these files.  The files may or may not set these values or
+                                    contain additional information. This information is listed for convenience only.</td></tr></table>
+                        <br>
+                        <a name="cm"><br></a>
+
+                        <TABLE cellSpacing=0 cols=1 cellPadding=0 width=770 bgColor=#0c055c><TBODY><TR>
+
+                            <TD width=770><B><FONT color=#ffffff size=+1>
+                            &nbsp;Common CM Config Parameters
+                            </FONT></B></TD></TR></TBODY></TABLE>
+                            <pre>
+NetworkAccess = Yes
+UpgradeServer = 172.22.48.1
+MaxCpeAllowed = 2
+PrivacyEnable = 1
+SnmpMib = docsDevSwAdminStatus.0 2
+SnmpMib = arrisCmDoc30AccessHttpTimeout.0 10
+UpstreamServiceFlow =
+    SfReference = 0
+#   SfId = 99368970  -- assigned by CMTS, correlates to PcSfId
+    SfClassName = ""
+    SfQosSetType = 7
+    SfTrafficPriority = 1
+    SfMaxTrafficRate = 128000
+    SfMaxTrafficBurst = 3044
+    SfMinReservedRate = 0
+    SfMinReservedRatePktsize = 0
+    SfActiveQosTimeout = 0
+    SfAdmittedQosTimeout = 200
+    SfMaxConcatBurst = 1522
+    SfSchedulingType  = 2
+DownstreamServiceFlow =
+    SfReference = 0
+#   SfId = 99377163  -- assigned by CMTS, correlates to PcSfId
+    SfClassName = ""
+    SfQosSetType = 7
+    SfTrafficPriority = 1
+    SfMaxTrafficRate = 128000
+    SfMaxTrafficBurst = 3044
+    SfMinReservedRate = 0
+    SfMinReservedRatePktsize = 0
+    SfActiveQosTimeout = 0
+    SfAdmittedQosTimeout = 200
+DownstreamServiceFlow =
+    SfReference = 0
+#   SfId = 99377164  -- assigned by CMTS, correlates to PcSfId
+    SfClassName = ""
+    SfQosSetType = 7
+    SfTrafficPriority = 1
+    SfMaxTrafficRate = 1126400
+    SfMaxTrafficBurst = 3044
+    SfMinReservedRate = 0
+    SfMinReservedRatePktsize = 0
+    SfActiveQosTimeout = 0
+    SfAdmittedQosTimeout = 200
+
+DownstreamPacketClassification =
+    PcServiceFlow = 99377164
+    PcIdentifier = 11
+    PcRulePriority = 0
+    PcActivationState = 1
+        PcIpProtocol = 6
+        PcIpDestPortStart = 0
+        PcIpDestPortEnd = 65535
+DownstreamPacketClassification =
+    PcServiceFlow = 99377164
+    PcIdentifier = 12
+    PcRulePriority = 0
+    PcActivationState = 1
+        PcIpProtocol = 6
+        PcIpDestPortStart = 0
+        PcIpDestPortEnd = 65535
+DownstreamPacketClassification =
+    PcServiceFlow = 99377164
+    PcIdentifier = 13
+    PcRulePriority = 0
+    PcActivationState = 1
+        PcIpProtocol = 6
+        PcIpDestPortStart = 0
+        PcIpDestPortEnd = 65535
+
+<FONT color=#0000ff># </FONT><br><FONT color=#0000ff># Note:<i> Items assigned by CMTS are not included in the config file.</i></FONT><br><FONT color=#0000ff># &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i> PcSfId maps to Instance of docsQosServiceFlowTable.</i></FONT><br><FONT color=#0000ff># </FONT><br></pre><a name="mta"><br></a><TABLE cellSpacing=0 cols=1 cellPadding=0 width=770 bgColor=#0c055c><TBODY><TR>
+
+	<!-- END ARRIS PAGE CONTENT -->
+	</p>
+	</div> <!-- main_body -->
+
+	<div class="push"></div>
+</div> <!-- wrapper -->
+
+<div class="footer">
+    &copy; 2024 ARRIS Enterprises, LLC.  All rights reserved.
+</div>
+</body>
+</html>
+
+

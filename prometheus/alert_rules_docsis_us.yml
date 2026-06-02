@@ -1,0 +1,53 @@
+# US DOCSIS alert thresholds
+# Suitable for Comcast, Spectrum, Cox, etc.
+# Key differences from EuroDOCSIS:
+#   - Lower downstream warning: US plants operate down to -15 dBmV,
+#     standard ISP window is -7 to +7 dBmV
+#   - Higher upstream maximum: US sub-split (42 MHz) allows single-channel
+#     output up to 57-58 dBmV, but bonded 4ch maxes around 51 dBmV
+
+groups:
+  - name: cm3500.docsis_us
+    rules:
+      # Downstream power: US standard operating window -7 to +7 dBmV
+      - alert: CM3500USDownstreamPowerLow
+        expr: cm3500_downstream_qam_power_dbmv < -7
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "Low downstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Downstream SC-QAM power on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz is {{ $value | printf \"%.1f\" }} dBmV (US DOCSIS threshold: -7 dBmV). Below standard ISP operating window."
+
+      - alert: CM3500USDownstreamPowerHigh
+        expr: cm3500_downstream_qam_power_dbmv > 12
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "High downstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Downstream SC-QAM power on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz is {{ $value | printf \"%.1f\" }} dBmV (threshold: +12 dBmV)."
+
+      # Upstream: US bonded 4ch ATDMA/64QAM max ~51 dBmV
+      # Single channel can reach 57-58 but bonded is more constrained
+      - alert: CM3500USUpstreamPowerHigh
+        expr: cm3500_upstream_qam_power_dbmv > 51
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "High upstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream transmit power on channel {{ $labels.channel }} at {{ $labels.frequency_mhz }} MHz is {{ $value | printf \"%.1f\" }} dBmV. Near bonded-channel maximum (~51 dBmV). May indicate return path issues."
+
+      - alert: CM3500USUpstreamPowerCritical
+        expr: cm3500_upstream_qam_power_dbmv > 55
+        for: 5m
+        labels:
+          severity: critical
+          plant: docsis_us
+        annotations:
+          summary: "Critical upstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. Exceeds bonded-channel maximum. Connectivity issues are likely."

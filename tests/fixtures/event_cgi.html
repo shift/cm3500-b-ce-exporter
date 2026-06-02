@@ -1,0 +1,333 @@
+<!DOCTYPE HTML PUBLIC
+"-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+	<title>Touchstone Event Log</title>
+	<meta http-equiv="Pragma" content="no-cache">
+        <script type="text/javascript" src="/validation.js"></script>
+    <link rel="stylesheet" href="/arris_style.css">
+</head>
+
+<body class="CM3500" onload="onPageLoad()">
+<div class="wrapper">
+
+	<div class="header">
+	<div class="header_text">
+          <h1>Event Log</h1>
+          <a href="logout_cgi">Logout</a>
+	</div>
+	</div>
+
+	<div id="navbar">
+	<ul>
+	<li><a style="width: 20.00%;" href="status_cgi">Status</a></li>
+<li><a style="width: 20.00%;" href="vers_cgi">HW/FW Versions</a></li>
+<li id="current"><a style="width: 20.00%;" href="event_cgi">Event Log</a></li>
+<li><a style="width: 20.00%;" href="cm_state_cgi">CM State</a></li>
+<li><a style="width: 20.00%;" href="product_cgi">Advanced</a></li>
+
+	</ul>
+	</div>
+	
+	<div class="main_body">
+	<p>
+	<!-- INSERT ARRIS PAGE CONTENT HERE -->
+	
+<table bgcolor="#0c055c" cellpadding="0" cellspacing="0" cols="1" width="770">
+<tbody><tr>
+    <td width="770"><b><font color="#ffffff" size="+1">
+    &nbsp;DOCSIS(CM) Events </font></b></td></tr>
+</tbody>
+</table>
+
+<br>
+
+<!-- <TEXTAREA ROWS="25" COLS="100"> -->
+<!-- <html> --> 
+<table border=1 cellpadding="1" cols="4" width="770">
+<tbody>
+<tr>
+  <td width="10%" valign=top align=center><b>Date Time</b></td>
+  <td width="10%" valign=top align=center><b>Event ID</b></td>
+  <td width="5%"  valign=top align=center><b>Event Level</b></td>
+  <td width="45%" valign=top align=center><b>Description</b></td>
+</tr>
+<tr>
+	<td align=center>5/27/2026 15:57</td>
+	<td align=center>69010200</td>
+	<td align=center>6</td>
+	<td align=left>SW Download INIT - Via Config file 3500upgrade110542.cfg</td>
+</tr><tr>
+	<td align=center>5/27/2026 16:07</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=22:33:44:55:66:77;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>5/27/2026 16:15</td>
+	<td align=center>69011200</td>
+	<td align=center>6</td>
+	<td align=left>SW download Successful - Via Config file</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012500</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:US_Diplexer_Mode_Initialization: [5-85] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=22:33:44:55:66:77;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012600</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:DS_Diplexer_Mode_Initialization: [108-1002] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=22:33:44:55:66:77;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>5/27/2026 16:16</td>
+	<td align=center>90000000</td>
+	<td align=center>5</td>
+	<td align=left>MIMO Event MIMO: Stored MIMO=-1 post cfg file MIMO=-1;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=22:33:44:55:66:77;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012500</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:US_Diplexer_Mode_Initialization: [5-85] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012600</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:DS_Diplexer_Mode_Initialization: [108-1002] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>82000200</td>
+	<td align=center>3</td>
+	<td align=left>No Ranging Response received - T3 time-out;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68001202</td>
+	<td align=center>3</td>
+	<td align=left>DHCP failed - DHCP Solicit sent, No DHCP Advertise received;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:02</td>
+	<td align=center>68010700</td>
+	<td align=center>4</td>
+	<td align=left>Primary lease failed, IPv4 fallback initiated;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 11:54</td>
+	<td align=center>90000000</td>
+	<td align=center>5</td>
+	<td align=left>MIMO Event MIMO: Stored MIMO=-1 post cfg file MIMO=-1;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 11:59</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012500</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:US_Diplexer_Mode_Initialization: [5-85] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012600</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:DS_Diplexer_Mode_Initialization: [108-1002] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68001202</td>
+	<td align=center>3</td>
+	<td align=left>DHCP failed - DHCP Solicit sent, No DHCP Advertise received;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68010700</td>
+	<td align=center>4</td>
+	<td align=left>Primary lease failed, IPv4 fallback initiated;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 14:27</td>
+	<td align=center>90000000</td>
+	<td align=center>5</td>
+	<td align=left>MIMO Event MIMO: Stored MIMO=-1 post cfg file MIMO=-1;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 14:32</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012500</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:US_Diplexer_Mode_Initialization: [5-85] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012600</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:DS_Diplexer_Mode_Initialization: [108-1002] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68001202</td>
+	<td align=center>3</td>
+	<td align=left>DHCP failed - DHCP Solicit sent, No DHCP Advertise received;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68010700</td>
+	<td align=center>4</td>
+	<td align=left>Primary lease failed, IPv4 fallback initiated;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 14:36</td>
+	<td align=center>90000000</td>
+	<td align=center>5</td>
+	<td align=left>MIMO Event MIMO: Stored MIMO=-1 post cfg file MIMO=-1;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 14:41</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 15:18</td>
+	<td align=center>68010100</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW sent - No response for IPv4;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 15:18</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012500</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:US_Diplexer_Mode_Initialization: [5-85] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>75012600</td>
+	<td align=center>6</td>
+	<td align=left>CMSTATUS:DS_Diplexer_Mode_Initialization: [108-1002] 
+;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68001202</td>
+	<td align=center>3</td>
+	<td align=left>DHCP failed - DHCP Solicit sent, No DHCP Advertise received;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>1/1/1970 1:01</td>
+	<td align=center>68010700</td>
+	<td align=center>4</td>
+	<td align=left>Primary lease failed, IPv4 fallback initiated;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 15:49</td>
+	<td align=center>90000000</td>
+	<td align=center>5</td>
+	<td align=left>MIMO Event MIMO: Stored MIMO=-1 post cfg file MIMO=-1;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 15:50</td>
+	<td align=center>67061601</td>
+	<td align=center>6</td>
+	<td align=left>US profile assignment change.  US Chan ID: 10; Previous Profile: 9; New Profile: 12.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 15:54</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:07</td>
+	<td align=center>74010100</td>
+	<td align=center>6</td>
+	<td align=left>CM-STATUS message sent.  Event Type Code: 16; Chan ID: 33; DSID: N/A; MAC Addr: N/A; OFDM/OFDMA Profile ID: 2.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:09</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:09</td>
+	<td align=center>74010100</td>
+	<td align=center>6</td>
+	<td align=left>CM-STATUS message sent.  Event Type Code: 16; Chan ID: 33; DSID: N/A; MAC Addr: N/A; OFDM/OFDMA Profile ID: 2.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:14</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:16</td>
+	<td align=center>74010100</td>
+	<td align=center>6</td>
+	<td align=left>CM-STATUS message sent.  Event Type Code: 24; Chan ID: 33; DSID: N/A; MAC Addr: N/A; OFDM/OFDMA Profile ID: 2.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:19</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:19</td>
+	<td align=center>67061601</td>
+	<td align=center>6</td>
+	<td align=left>US profile assignment change.  US Chan ID: 10; Previous Profile: 12; New Profile: 11.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:24</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:35</td>
+	<td align=center>67061601</td>
+	<td align=center>6</td>
+	<td align=left>US profile assignment change.  US Chan ID: 10; Previous Profile: 11; New Profile: 10.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 16:39</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 17:14</td>
+	<td align=center>67061601</td>
+	<td align=center>6</td>
+	<td align=left>US profile assignment change.  US Chan ID: 10; Previous Profile: 10; New Profile: 9.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 17:19</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 18:26</td>
+	<td align=center>68010100</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW sent - No response for IPv4;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/1/2026 18:26</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/2/2026 7:11</td>
+	<td align=center>82000200</td>
+	<td align=center>3</td>
+	<td align=left>No Ranging Response received - T3 time-out;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr><tr>
+	<td align=center>6/2/2026 7:12</td>
+	<td align=center>68010300</td>
+	<td align=center>4</td>
+	<td align=left>DHCP RENEW WARNING - Field invalid in response v4 option;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;CM-QOS=1.1;CM-VER=3.1;</td>
+</tr>
+</tbody>
+</table>
+	
+	<!-- END ARRIS PAGE CONTENT -->
+	</p>
+	</div> <!-- main_body -->
+
+	<div class="push"></div>
+</div> <!-- wrapper -->
+	 
+<div class="footer">
+    &copy; 2024 ARRIS Enterprises, LLC.  All rights reserved.
+</div>
+</body>
+</html>
+
+
