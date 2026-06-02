@@ -1,6 +1,6 @@
 [package]
 name = "cm3500-b-ce-exporter"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Prometheus exporter for ARRIS CM3500B CE cable modem"
 license = "AGPL-3.0-or-later"
