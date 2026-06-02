@@ -53,3 +53,24 @@ groups:
         annotations:
           summary: "Critical upstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
           description: "Upstream transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. At or above EuroDOCSIS maximum transmit level. Connectivity loss is likely."
+
+      # OFDMA upstream power: same plant constraints apply
+      - alert: CM3500EuroUpstreamOFDMAHigh
+        expr: cm3500_upstream_ofdma_tx_power_dbmv > 49
+        for: 5m
+        labels:
+          severity: warning
+          plant: eurodocsis
+        annotations:
+          summary: "High upstream OFDMA power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream OFDMA transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. Near EuroDOCSIS maximum for bonded channels."
+
+      - alert: CM3500EuroUpstreamOFDMACritical
+        expr: cm3500_upstream_ofdma_tx_power_dbmv > 53
+        for: 5m
+        labels:
+          severity: critical
+          plant: eurodocsis
+        annotations:
+          summary: "Critical upstream OFDMA power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream OFDMA transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. At or above EuroDOCSIS maximum. Connectivity loss is likely."

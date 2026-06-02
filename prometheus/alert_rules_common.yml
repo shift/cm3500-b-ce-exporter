@@ -92,7 +92,42 @@ groups:
           summary: "US profile assignment changes ({{ $value }} in last 10m)"
           description: "{{ $value }} upstream OFDMA profile assignment changes in the last 10 minutes."
 
-      - alert: CM3500DHCPLeaseExpiring
+      - alert: CM3500DHCPRenewNoResponse
+        expr: changes(cm3500_event_dhcp_renew_no_response[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DHCP renew sent with no response ({{ $value }} in last 10m)"
+          description: "{{ $value }} DHCP RENEW sent - No response events in the last 10 minutes. May indicate CMTS DHCP server or provisioning issues."
+
+      - alert: CM3500UpstreamProfileDowngraded
+        expr: cm3500_event_upstream_active_profile < on(channel) cm3500_event_upstream_active_profile offset 30m
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Upstream profile downgraded on channel {{ $labels.channel }}"
+          description: "Upstream OFDMA profile on channel {{ $labels.channel }} has decreased from {{ $value | printf \"%.0f\" }} to the current value, suggesting upstream noise ingress on the CMTS segment."
+
+      # Upstream power applies to both SC-QAM and OFDMA
+      - alert: CM3500UpstreamPowerHigh
+        expr: cm3500_upstream_ofdma_tx_power_dbmv > 49
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High upstream OFDMA power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream OFDMA transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. May indicate return path attenuation."
+
+      - alert: CM3500UpstreamPowerDeltaHigh
+        expr: max(cm3500_upstream_qam_power_dbmv) - min(cm3500_upstream_qam_power_dbmv) > 6
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High upstream power tilt ({{ $value | printf \"%.1f\" }} dBmV across channels)"
+          description: "The delta between highest and lowest upstream SC-QAM transmit power exceeds 6 dBmV. This indicates frequency-dependent attenuation on the coax drop or return path."
         expr: cm3500_dhcp_lease_remaining_seconds < 60
         for: 2m
         labels:

@@ -51,3 +51,24 @@ groups:
         annotations:
           summary: "Critical upstream power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
           description: "Upstream transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. Exceeds bonded-channel maximum. Connectivity issues are likely."
+
+      # OFDMA upstream power: US bonded constraints
+      - alert: CM3500USUpstreamOFDMAHigh
+        expr: cm3500_upstream_ofdma_tx_power_dbmv > 51
+        for: 5m
+        labels:
+          severity: warning
+          plant: docsis_us
+        annotations:
+          summary: "High upstream OFDMA power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream OFDMA transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. Near US bonded-channel maximum (~51 dBmV)."
+
+      - alert: CM3500USUpstreamOFDMACritical
+        expr: cm3500_upstream_ofdma_tx_power_dbmv > 55
+        for: 5m
+        labels:
+          severity: critical
+          plant: docsis_us
+        annotations:
+          summary: "Critical upstream OFDMA power on channel {{ $labels.channel }} ({{ $value | printf \"%.1f\" }} dBmV)"
+          description: "Upstream OFDMA transmit power on channel {{ $labels.channel }} is {{ $value | printf \"%.1f\" }} dBmV. Exceeds bonded-channel maximum. Connectivity issues are likely."
