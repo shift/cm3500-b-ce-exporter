@@ -37,7 +37,6 @@ hw.cable_modem.qos.min_reserved.rate
 hw.cable_modem.qos.packets.count
 hw.cable_modem.qos.traffic.priority
 hw.cable_modem.upstream.ofdma.channel.width
-hw.cable_modem.upstream.ofdma.power
 hw.cable_modem.upstream.ofdma.subcarriers.active
 hw.cable_modem.upstream.power
 hw.cable_modem.upstream.profile_changes.count

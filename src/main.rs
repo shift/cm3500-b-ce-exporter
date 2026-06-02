@@ -80,30 +80,14 @@ async fn main() -> Result<()> {
         })
         .collect();
 
-    // Initial OTLP client (created after first scrape so we have modem info for resource attrs)
     let otlp_client: Arc<RwLock<Option<otlp::OtlpClient>>> =
         if let Some(endpoint) = &args.otlp_endpoint {
-            let first_scrape = parser::parse_all(
-                &client.fetch_page("status_cgi").await?,
-                &client.fetch_page("vers_cgi").await?,
-                &client.fetch_page("dhcp_cgi").await?,
-                &client.fetch_page("qos_cgi").await?,
-                &client.fetch_page("cm_state_cgi").await?,
-                &client.fetch_page("event_cgi").await?,
-                &client.fetch_page("config_params_cgi").await?,
-                0.0,
-            );
-            if let Ok(data) = first_scrape {
-                tracing::info!("OTLP push enabled, endpoint: {}", endpoint);
-                Arc::new(RwLock::new(Some(otlp::OtlpClient::new(
-                    endpoint,
-                    otlp_headers,
-                    &data,
-                ))))
-            } else {
-                tracing::warn!("Failed initial parse for OTLP resource attrs, OTLP disabled");
-                Arc::new(RwLock::new(None))
-            }
+            tracing::info!("OTLP push enabled, endpoint: {}", endpoint);
+            Arc::new(RwLock::new(Some(otlp::OtlpClient::new_fallback(
+                endpoint,
+                otlp_headers,
+                &args.modem_url,
+            ))))
         } else {
             Arc::new(RwLock::new(None))
         };

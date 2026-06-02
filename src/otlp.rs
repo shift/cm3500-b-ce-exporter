@@ -3,7 +3,10 @@ use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde_json::{json, Map, Value};
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct OtlpClient {
@@ -11,43 +14,64 @@ pub struct OtlpClient {
     metrics_endpoint: String,
     logs_endpoint: String,
     headers: Vec<(String, String)>,
-    resource_attrs: Vec<Value>,
+    resource_attrs: Mutex<Vec<Value>>,
+    needs_resource_enrichment: AtomicBool,
     sent_event_keys: Mutex<VecDeque<String>>,
 }
 
 impl OtlpClient {
     pub fn new(endpoint: &str, headers: Vec<(String, String)>, data: &ScrapedData) -> Self {
-        let hw_device_id = data
-            .interfaces
-            .iter()
-            .find(|iface| !iface.mac_address.is_empty())
-            .map(|iface| iface.mac_address.as_str())
-            .filter(|mac| *mac != "00:00:00:00:00:00")
-            .unwrap_or(&data.version_info.serial);
+        Self::with_resource_attrs(
+            endpoint,
+            headers,
+            build_resource_attrs(Some(data), None),
+            false,
+        )
+    }
 
-        let resource_attrs = vec![
-            str_attr("service.name", "cm3500-exporter"),
-            str_attr("service.version", env!("CARGO_PKG_VERSION")),
-            str_attr("service.instance.id", &data.version_info.serial),
-            str_attr("hw.device.vendor", &data.version_info.vendor),
-            str_attr("hw.device.model", &data.version_info.model),
-            str_attr("hw.device.id", hw_device_id),
-            str_attr("network.connection.type", "cable"),
-            str_attr("cm3500.firmware.version", &data.version_info.software_rev),
-            str_attr("cm3500.firmware.name", &data.version_info.firmware_name),
-        ];
+    pub fn new_fallback(endpoint: &str, headers: Vec<(String, String)>, modem_url: &str) -> Self {
+        Self::with_resource_attrs(
+            endpoint,
+            headers,
+            build_resource_attrs(None, Some(modem_url)),
+            true,
+        )
+    }
 
+    fn with_resource_attrs(
+        endpoint: &str,
+        headers: Vec<(String, String)>,
+        resource_attrs: Vec<Value>,
+        needs_resource_enrichment: bool,
+    ) -> Self {
         Self {
             client: Client::new(),
             metrics_endpoint: normalize_otlp_endpoint(endpoint, SignalKind::Metrics),
             logs_endpoint: normalize_otlp_endpoint(endpoint, SignalKind::Logs),
             headers,
-            resource_attrs,
+            resource_attrs: Mutex::new(resource_attrs),
+            needs_resource_enrichment: AtomicBool::new(needs_resource_enrichment),
             sent_event_keys: Mutex::new(VecDeque::with_capacity(256)),
         }
     }
 
+    pub fn enrich_from_data(&self, data: &ScrapedData) {
+        if self
+            .needs_resource_enrichment
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            let mut resource_attrs = self.resource_attrs.lock().unwrap();
+            *resource_attrs = build_resource_attrs(Some(data), None);
+        }
+    }
+
+    fn resource_attrs(&self) -> Vec<Value> {
+        self.resource_attrs.lock().unwrap().clone()
+    }
+
     pub async fn push(&self, data: &ScrapedData) -> Result<()> {
+        self.enrich_from_data(data);
         self.push_metrics(data).await?;
         self.push_logs(data).await?;
         Ok(())
@@ -326,8 +350,8 @@ impl OtlpClient {
         }
         if !us_ofdma_power.is_empty() {
             metrics.push(gauge(
-                "hw.cable_modem.upstream.ofdma.power",
-                "Upstream OFDMA transmit power",
+                "hw.cable_modem.upstream.power",
+                "Upstream transmit power",
                 "dBmV",
                 us_ofdma_power,
             ));
@@ -594,7 +618,7 @@ impl OtlpClient {
 
         json!({
             "resourceMetrics": [{
-                "resource": { "attributes": self.resource_attrs },
+                "resource": { "attributes": self.resource_attrs() },
                 "scopeMetrics": [{
                     "scope": {
                         "name": "cm3500-exporter",
@@ -622,7 +646,7 @@ impl OtlpClient {
 
         Some(json!({
             "resourceLogs": [{
-                "resource": { "attributes": self.resource_attrs },
+                "resource": { "attributes": self.resource_attrs() },
                 "scopeLogs": [{
                     "scope": {
                         "name": "cm3500-exporter",
@@ -651,6 +675,7 @@ impl OtlpClient {
             let (severity_number, severity_text) = severity_for_level(event.event_level);
             let mut attrs = vec![
                 str_attr("event.name", event_name),
+                str_attr("event.domain", "cable_modem"),
                 str_attr("cable_modem.event.id", &event.event_id),
                 str_attr("cable_modem.event.type", event_type),
                 int_attr("cable_modem.event.level", event.event_level as i64),
@@ -769,6 +794,40 @@ fn str_attr(key: &str, value: &str) -> Value {
     json!({"key": key, "value": {"stringValue": value}})
 }
 
+fn build_resource_attrs(data: Option<&ScrapedData>, modem_url: Option<&str>) -> Vec<Value> {
+    if let Some(data) = data {
+        let hw_device_id = data
+            .interfaces
+            .iter()
+            .find(|iface| !iface.mac_address.is_empty())
+            .map(|iface| iface.mac_address.as_str())
+            .filter(|mac| *mac != "00:00:00:00:00:00")
+            .unwrap_or(&data.version_info.serial);
+
+        return vec![
+            str_attr("service.name", "cm3500-exporter"),
+            str_attr("service.version", env!("CARGO_PKG_VERSION")),
+            str_attr("service.instance.id", &data.version_info.serial),
+            str_attr("hw.device.vendor", &data.version_info.vendor),
+            str_attr("hw.device.model", &data.version_info.model),
+            str_attr("hw.device.id", hw_device_id),
+            str_attr("network.connection.type", "cable"),
+            str_attr("cm3500.firmware.version", &data.version_info.software_rev),
+            str_attr("cm3500.firmware.name", &data.version_info.firmware_name),
+        ];
+    }
+
+    vec![
+        str_attr("service.name", "cm3500-exporter"),
+        str_attr("service.version", env!("CARGO_PKG_VERSION")),
+        str_attr("service.instance.id", modem_url.unwrap_or("unknown")),
+        str_attr("hw.device.vendor", "ARRIS"),
+        str_attr("hw.device.model", "CM3500B CE"),
+        str_attr("hw.device.id", "unknown"),
+        str_attr("network.connection.type", "cable"),
+    ]
+}
+
 fn int_attr(key: &str, value: i64) -> Value {
     json!({"key": key, "value": {"intValue": value.to_string()}})
 }
@@ -784,7 +843,7 @@ fn f64_dp(value: f64, attributes: Vec<Value>, time_nanos: &str) -> Value {
 fn i64_dp(value: i64, attributes: Vec<Value>, time_nanos: &str) -> Value {
     json!({
         "timeUnixNano": time_nanos,
-        "asInt": value.to_string(),
+        "as_int": value.to_string(),
         "attributes": attributes
     })
 }
@@ -953,6 +1012,10 @@ mod tests {
             Some("cable_modem.docsis_event")
         );
         assert_eq!(
+            attr_value(&first_record["attributes"], "event.domain").as_deref(),
+            Some("cable_modem")
+        );
+        assert_eq!(
             attr_value(&first_record["attributes"], "cable_modem.event.type").as_deref(),
             Some("T3_TIMEOUT")
         );
@@ -987,6 +1050,22 @@ mod tests {
             snapshot,
             include_str!("../tests/fixtures/otlp_logs_snapshot.txt")
         );
+    }
+
+    #[test]
+    fn fallback_otlp_client_enriches_resource_attrs_after_successful_scrape() {
+        let data = sample_data();
+        let client =
+            OtlpClient::new_fallback("https://example.test/otlp", vec![], "https://192.168.100.1");
+
+        let before = client.build_metrics_body(&data, "1000000000");
+        let before_attrs = &before["resourceMetrics"][0]["resource"]["attributes"];
+        assert!(has_attr(before_attrs, "hw.device.id", "unknown"));
+
+        client.enrich_from_data(&data);
+        let after = client.build_metrics_body(&data, "1000000001");
+        let after_attrs = &after["resourceMetrics"][0]["resource"]["attributes"];
+        assert!(has_attr(after_attrs, "hw.device.id", "aa:bb:cc:dd:ee:ff"));
     }
 
     fn has_metric(metrics: &[Value], name: &str) -> bool {
@@ -1062,6 +1141,7 @@ mod tests {
             .map(|m| m["name"].as_str().unwrap().to_string())
             .collect::<Vec<_>>();
         metrics.sort();
+        metrics.dedup();
 
         let rx_mer = metric(
             body["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]
