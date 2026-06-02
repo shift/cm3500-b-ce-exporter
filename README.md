@@ -35,12 +35,18 @@ Options:
   --modem-url <URL>         Modem base URL [default: https://192.168.100.1]
   --username <USER>         Login username [default: admin]
   --password <PASS>         Login password (required)
-  --listen <ADDR>           Listen address [default: 0.0.0.0:10044]
-  --disable-prometheus      Disable the Prometheus /metrics HTTP endpoint entirely
-  --interval <SECONDS>      Scrape interval [default: 30]
+  --listen <ADDR>              Listen address [default: 0.0.0.0:10044]
+  --disable-prometheus         Disable the Prometheus /metrics HTTP endpoint entirely
+  --interval <SECONDS>         Scrape interval [default: 30]
+  --state-file <PATH>          Write connection state changes to this JSON file
+  --capacity-file <PATH>       Write configured upstream/downstream capacity to this JSON file
+  --state-down-threshold <N>   Consecutive bad scrapes/states before reporting down [default: 3]
+  --state-up-threshold <N>     Consecutive good scrapes before reporting recovered [default: 2]
+  --capacity-margin-percent <PERCENT>
+                                Percent of configured service flow bandwidth to expose as shaped capacity [default: 95]
 
-  --otlp-endpoint <URL>     OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
-  --otlp-header <KEY=VALUE> OTLP header, can be repeated (e.g. Authorization=Basic...)
+  --otlp-endpoint <URL>        OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
+  --otlp-header <KEY=VALUE>    OTLP header, can be repeated (e.g. Authorization=Basic...)
 ```
 
 ### OTLP Push (Grafana Cloud)
@@ -72,6 +78,49 @@ cm3500-b-ce-exporter \
 ```
 
 Both Prometheus `/metrics` and OTLP push can run simultaneously. If `--otlp-endpoint` points at an OTLP base URL like `https://.../otlp`, the exporter sends metrics to `/v1/metrics` and logs to `/v1/logs` under that base. When `--disable-prometheus` is set, the exporter does not bind any HTTP port.
+
+## Gateway Automation Outputs
+
+The exporter can optionally write machine-readable JSON files for router/firewall automation.
+
+### Link state file
+
+Example:
+
+```json
+{
+  "status": "up",
+  "timestamp": "1748850000",
+  "modem_up": true,
+  "cm_status": "OPERATIONAL",
+  "dhcp_state": "bound",
+  "degraded": false,
+  "reason": null
+}
+```
+
+`status` is hysteresis-aware:
+- `up` - healthy
+- `degraded` - transitional or partially unhealthy
+- `down` - enough consecutive bad scrapes/states to declare failure
+
+### Capacity file
+
+Example:
+
+```json
+{
+  "timestamp": "1748850000",
+  "upstream_bps": 128000000,
+  "downstream_bps": 1126400000,
+  "shaped_upstream_bps": 121600000,
+  "shaped_downstream_bps": 1070080000,
+  "source": "service_flow_config",
+  "valid": true
+}
+```
+
+Files are written atomically and only rewritten when their semantic content changes, making them suitable for `systemd.path` or other file-watch based automation.
 
 ## Scraping Model
 

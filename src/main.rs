@@ -1,7 +1,8 @@
-use cm3500_b_ce_exporter::{client, metrics, otlp, parser};
+use cm3500_b_ce_exporter::{automation, client, metrics, otlp, parser};
 
 use anyhow::{bail, Result};
 use clap::Parser;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -37,6 +38,26 @@ struct Args {
     #[arg(long, default_value_t = 30)]
     interval: u64,
 
+    /// Write connection state changes to this JSON file
+    #[arg(long, value_name = "PATH")]
+    state_file: Option<PathBuf>,
+
+    /// Write configured upstream/downstream capacity to this JSON file
+    #[arg(long, value_name = "PATH")]
+    capacity_file: Option<PathBuf>,
+
+    /// Consecutive bad scrapes or bad modem states required before reporting down
+    #[arg(long, default_value_t = 3)]
+    state_down_threshold: u32,
+
+    /// Consecutive good scrapes required before reporting recovered
+    #[arg(long, default_value_t = 2)]
+    state_up_threshold: u32,
+
+    /// Percent of configured service flow bandwidth to expose as shaped capacity
+    #[arg(long, default_value_t = 95)]
+    capacity_margin_percent: u8,
+
     /// OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
     #[arg(long)]
     otlp_endpoint: Option<String>,
@@ -44,6 +65,11 @@ struct Args {
     /// OTLP HTTP header in KEY=VALUE format (can be repeated)
     #[arg(long = "otlp-header", value_name = "KEY=VALUE")]
     otlp_headers: Vec<String>,
+}
+
+struct ScrapeResult {
+    metrics_text: String,
+    observation: automation::ScrapeObservation,
 }
 
 #[tokio::main]
@@ -66,11 +92,21 @@ async fn main() -> Result<()> {
     tracing::info!("Logging into modem at {}", args.modem_url);
     client.login().await?;
 
-    // Initial scrape
-    let initial_metrics = do_scrape(&client, None).await;
-    let metrics_text: Arc<RwLock<String>> = Arc::new(RwLock::new(initial_metrics));
+    let mut automation_outputs = automation::AutomationOutputs::new(
+        args.state_file.clone(),
+        args.capacity_file.clone(),
+        args.state_down_threshold,
+        args.state_up_threshold,
+    );
 
-    // Parse OTLP headers
+    let initial_scrape = do_scrape(&client, None, args.capacity_margin_percent).await;
+    if let Some(outputs) = automation_outputs.as_mut() {
+        if let Err(e) = outputs.update(&initial_scrape.observation) {
+            tracing::warn!("Failed to write automation output files: {}", e);
+        }
+    }
+    let metrics_text: Arc<RwLock<String>> = Arc::new(RwLock::new(initial_scrape.metrics_text));
+
     let otlp_headers: Vec<(String, String)> = args
         .otlp_headers
         .iter()
@@ -92,21 +128,27 @@ async fn main() -> Result<()> {
             Arc::new(RwLock::new(None))
         };
 
-    // Background scraper
     let scrape_handle = {
         let metrics_text = metrics_text.clone();
         let otlp_client = otlp_client.clone();
         let client = client.clone();
         let interval_secs = args.interval;
+        let capacity_margin_percent = args.capacity_margin_percent;
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            let mut automation_outputs = automation_outputs;
             loop {
                 interval.tick().await;
                 let otlp = otlp_client.read().await;
                 let otlp_ref = otlp.as_ref();
-                let new_text = do_scrape(&client, otlp_ref).await;
+                let scrape = do_scrape(&client, otlp_ref, capacity_margin_percent).await;
+                if let Some(outputs) = automation_outputs.as_mut() {
+                    if let Err(e) = outputs.update(&scrape.observation) {
+                        tracing::warn!("Failed to write automation output files: {}", e);
+                    }
+                }
                 let mut guard = metrics_text.write().await;
-                *guard = new_text;
+                *guard = scrape.metrics_text;
             }
         })
     };
@@ -135,7 +177,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn do_scrape(client: &client::ModemClient, otlp: Option<&otlp::OtlpClient>) -> String {
+async fn do_scrape(
+    client: &client::ModemClient,
+    otlp: Option<&otlp::OtlpClient>,
+    capacity_margin_percent: u8,
+) -> ScrapeResult {
     let start = Instant::now();
     match client.fetch_all().await {
         Ok(pages) => {
@@ -160,7 +206,6 @@ async fn do_scrape(client: &client::ModemClient, otlp: Option<&otlp::OtlpClient>
                         duration,
                     );
 
-                    // Push to OTLP if configured
                     if let Some(otlp) = otlp {
                         match otlp.push(&data).await {
                             Ok(()) => tracing::debug!("OTLP push OK"),
@@ -168,19 +213,37 @@ async fn do_scrape(client: &client::ModemClient, otlp: Option<&otlp::OtlpClient>
                         }
                     }
 
-                    metrics::render_metrics(&data)
+                    ScrapeResult {
+                        metrics_text: metrics::render_metrics(&data),
+                        observation: automation::ScrapeObservation::from_data(
+                            &data,
+                            capacity_margin_percent,
+                        ),
+                    }
                 }
                 Err(e) => {
                     let duration = start.elapsed().as_secs_f64();
                     tracing::error!("Parse error: {}", e);
-                    metrics::render_error_metrics(&e.to_string(), duration)
+                    ScrapeResult {
+                        metrics_text: metrics::render_error_metrics(&e.to_string(), duration),
+                        observation: automation::ScrapeObservation::from_error(
+                            e.to_string(),
+                            capacity_margin_percent,
+                        ),
+                    }
                 }
             }
         }
         Err(e) => {
             let duration = start.elapsed().as_secs_f64();
             tracing::error!("Fetch error: {}", e);
-            metrics::render_error_metrics(&e.to_string(), duration)
+            ScrapeResult {
+                metrics_text: metrics::render_error_metrics(&e.to_string(), duration),
+                observation: automation::ScrapeObservation::from_error(
+                    e.to_string(),
+                    capacity_margin_percent,
+                ),
+            }
         }
     }
 }
