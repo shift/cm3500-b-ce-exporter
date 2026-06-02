@@ -17,6 +17,8 @@ pub struct ScrapedPages {
     pub cm_state: String,
     pub event: String,
     pub config_params: String,
+    pub product: String,
+    pub spectrum: Option<String>,
 }
 
 impl ModemClient {
@@ -75,23 +77,38 @@ impl ModemClient {
         Ok(html)
     }
 
+    pub async fn post_page(&self, endpoint: &str, form: &[(&str, &str)]) -> Result<String> {
+        let resp = self
+            .client
+            .post(format!("{}/cgi-bin/{}", self.base_url, endpoint))
+            .form(form)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("POST {} failed: HTTP {}", endpoint, resp.status()));
+        }
+
+        Ok(resp.text().await?)
+    }
+
     fn is_session_expired(html: &str) -> bool {
         html.contains("url=login_cgi") || html.contains("Touchstone Login")
     }
 
-    pub async fn fetch_all(&self) -> Result<ScrapedPages> {
-        let pages = self.try_fetch_all().await;
+    pub async fn fetch_all(&self, enable_spectrum: bool) -> Result<ScrapedPages> {
+        let pages = self.try_fetch_all(enable_spectrum).await;
         match pages {
             Ok(p) => Ok(p),
             Err(e) => {
                 tracing::warn!("Fetch failed ({}), re-authenticating...", e);
                 self.login().await?;
-                self.try_fetch_all().await
+                self.try_fetch_all(enable_spectrum).await
             }
         }
     }
 
-    async fn try_fetch_all(&self) -> Result<ScrapedPages> {
+    async fn try_fetch_all(&self, enable_spectrum: bool) -> Result<ScrapedPages> {
         let status = self.fetch_page("status_cgi").await?;
         if Self::is_session_expired(&status) {
             return Err(anyhow!("Session expired"));
@@ -103,6 +120,18 @@ impl ModemClient {
         let cm_state = self.fetch_page("cm_state_cgi").await?;
         let event = self.fetch_page("event_cgi").await?;
         let config_params = self.fetch_page("config_params_cgi").await?;
+        let product = self.fetch_page("product_cgi").await?;
+        let spectrum = if enable_spectrum {
+            Some(
+                self.post_page(
+                    "spectrum_cgi",
+                    &[("scan", "Scan"), ("centerSeq", "500"), ("widthSeq", "1000")],
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
 
         Ok(ScrapedPages {
             status,
@@ -112,6 +141,8 @@ impl ModemClient {
             cm_state,
             event,
             config_params,
+            product,
+            spectrum,
         })
     }
 }

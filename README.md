@@ -44,6 +44,7 @@ Options:
   --state-up-threshold <N>     Consecutive good scrapes before reporting recovered [default: 2]
   --capacity-margin-percent <PERCENT>
                                 Percent of configured service flow bandwidth to expose as shaped capacity [default: 95]
+  --enable-spectrum            Actively trigger a modem spectrum scan and export spectrum metrics
 
   --otlp-endpoint <URL>        OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
   --otlp-header <KEY=VALUE>    OTLP header, can be repeated (e.g. Authorization=Basic...)
@@ -185,6 +186,7 @@ The exporter scrapes the modem on a background interval (default: 30s) and serve
 | `cm3500_upstream_ofdma_tx_power_dbmv` | gauge | channel, fft_type | Transmit power in dBmV |
 | `cm3500_upstream_ofdma_channel_width_mhz` | gauge | channel | Channel width in MHz |
 | `cm3500_upstream_ofdma_active_subcarriers` | gauge | channel | Number of active subcarriers |
+| `cm3500_upstream_ofdma_active_subcarrier_range_mhz` | gauge | channel, edge | First/last active subcarrier positions |
 
 ### QoS & DOCSIS State
 
@@ -206,6 +208,20 @@ The exporter scrapes the modem on a background interval (default: 30s) and serve
 | `cm3500_event_dhcp_failures` | gauge | DHCP failures in event log |
 | `cm3500_event_dhcp_renew_warnings` | gauge | DHCP renew warnings in event log |
 | `cm3500_event_profile_changes` | gauge | Upstream profile assignment changes |
+| `cm3500_event_dhcp_renew_no_response` | gauge | DHCP renew sent with no response events |
+| `cm3500_event_upstream_active_profile` | gauge | Last seen upstream profile ID from event log |
+| `cm3500_event_ofdma_profile_id` | gauge | Last seen OFDM/OFDMA profile ID from event log |
+
+### Product & Spectrum
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `cm3500_product_ethernet_phy_info` | gauge | Ethernet PHY capability label from the modem |
+| `cm3500_product_logging_components_enabled` | gauge | Enabled internal logging components by debug group |
+| `cm3500_spectrum_chunks` | gauge | Number of spectrum chunks returned by a scan |
+| `cm3500_spectrum_chunk_power_dbmv` | gauge | Per-chunk min/avg/max power summary |
+| `cm3500_spectrum_chunk_metadata` | gauge | Per-chunk span/bin spacing/RBW metadata |
+| `cm3500_spectrum_bin_power_dbmv` | gauge | Per-bin spectrum power from the modem scan |
 
 ### QoS Configuration (from config_params_cgi)
 

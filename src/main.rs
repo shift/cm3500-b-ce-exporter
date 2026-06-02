@@ -58,6 +58,10 @@ struct Args {
     #[arg(long, default_value_t = 95)]
     capacity_margin_percent: u8,
 
+    /// Actively trigger a modem spectrum scan and export spectrum metrics
+    #[arg(long)]
+    enable_spectrum: bool,
+
     /// OTLP HTTP base URL or /v1/metrics endpoint to push metrics and logs to
     #[arg(long)]
     otlp_endpoint: Option<String>,
@@ -99,7 +103,13 @@ async fn main() -> Result<()> {
         args.state_up_threshold,
     );
 
-    let initial_scrape = do_scrape(&client, None, args.capacity_margin_percent).await;
+    let initial_scrape = do_scrape(
+        &client,
+        None,
+        args.capacity_margin_percent,
+        args.enable_spectrum,
+    )
+    .await;
     if let Some(outputs) = automation_outputs.as_mut() {
         if let Err(e) = outputs.update(&initial_scrape.observation) {
             tracing::warn!("Failed to write automation output files: {}", e);
@@ -134,6 +144,7 @@ async fn main() -> Result<()> {
         let client = client.clone();
         let interval_secs = args.interval;
         let capacity_margin_percent = args.capacity_margin_percent;
+        let enable_spectrum = args.enable_spectrum;
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
             let mut automation_outputs = automation_outputs;
@@ -141,7 +152,8 @@ async fn main() -> Result<()> {
                 interval.tick().await;
                 let otlp = otlp_client.read().await;
                 let otlp_ref = otlp.as_ref();
-                let scrape = do_scrape(&client, otlp_ref, capacity_margin_percent).await;
+                let scrape =
+                    do_scrape(&client, otlp_ref, capacity_margin_percent, enable_spectrum).await;
                 if let Some(outputs) = automation_outputs.as_mut() {
                     if let Err(e) = outputs.update(&scrape.observation) {
                         tracing::warn!("Failed to write automation output files: {}", e);
@@ -181,9 +193,10 @@ async fn do_scrape(
     client: &client::ModemClient,
     otlp: Option<&otlp::OtlpClient>,
     capacity_margin_percent: u8,
+    enable_spectrum: bool,
 ) -> ScrapeResult {
     let start = Instant::now();
-    match client.fetch_all().await {
+    match client.fetch_all(enable_spectrum).await {
         Ok(pages) => {
             let duration = start.elapsed().as_secs_f64();
             match parser::parse_all(
@@ -194,6 +207,8 @@ async fn do_scrape(
                 &pages.cm_state,
                 &pages.event,
                 &pages.config_params,
+                &pages.product,
+                pages.spectrum.as_deref(),
                 duration,
             ) {
                 Ok(data) => {

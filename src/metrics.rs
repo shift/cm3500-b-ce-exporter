@@ -69,6 +69,8 @@ pub fn render_metrics(data: &ScrapedData) -> String {
     render_cm_state(&mut out, &data.cm_state);
     render_event_log(&mut out, &data.events);
     render_interfaces(&mut out, &data.interfaces);
+    render_product_info(&mut out, &data.product_info);
+    render_spectrum(&mut out, &data.spectrum);
     render_cpe(&mut out, data.cpe_static, data.cpe_dynamic);
     render_service_flow_configs(&mut out, &data.service_flow_configs);
 
@@ -332,6 +334,26 @@ fn render_upstream_ofdm(out: &mut String, channels: &[crate::parser::UpstreamOfd
             ch.active_subcarriers as f64,
         );
     }
+
+    header(
+        out,
+        "cm3500_upstream_ofdma_active_subcarrier_range_mhz",
+        "First and last active upstream OFDMA subcarrier positions in MHz",
+        "gauge",
+    );
+    for ch in channels {
+        for (edge, value) in [
+            ("first", ch.first_active_subcarrier_mhz),
+            ("last", ch.last_active_subcarrier_mhz),
+        ] {
+            gauge(
+                out,
+                "cm3500_upstream_ofdma_active_subcarrier_range_mhz",
+                &[("channel", &ch.channel.to_string()), ("edge", edge)],
+                value,
+            );
+        }
+    }
 }
 
 fn render_dhcp(out: &mut String, dhcp: &crate::parser::DhcpInfo, dhcp_state: &str) {
@@ -468,7 +490,6 @@ fn render_event_log(out: &mut String, events: &[crate::parser::EventLogEntry]) {
         return;
     }
 
-    // Count events by event_id
     let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for e in events {
         *counts.entry(&e.event_id).or_insert(0) += 1;
@@ -489,21 +510,32 @@ fn render_event_log(out: &mut String, events: &[crate::parser::EventLogEntry]) {
         );
     }
 
-    // Track critical event types as dedicated metrics
     let mut t3_timeouts = 0u32;
     let mut t4_timeouts = 0u32;
     let mut dhcp_failures = 0u32;
     let mut dhcp_renew_warnings = 0u32;
+    let mut dhcp_renew_no_response = 0u32;
     let mut profile_changes = 0u32;
+    let mut us_profiles: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut ofdma_profiles: std::collections::HashMap<String, u32> =
+        std::collections::HashMap::new();
 
     for e in events {
         match e.event_id.as_str() {
-            "82000200" => t3_timeouts += 1,   // No Ranging Response - T3 time-out
-            "82000300" => t4_timeouts += 1,   // Ranging Request - T4 timeout
-            "68001202" => dhcp_failures += 1, // DHCP failed
-            "68010300" => dhcp_renew_warnings += 1, // DHCP RENEW WARNING
-            "67061601" => profile_changes += 1, // US profile assignment change
+            "82000200" => t3_timeouts += 1,
+            "82000300" => t4_timeouts += 1,
+            "68001202" => dhcp_failures += 1,
+            "68010300" => dhcp_renew_warnings += 1,
+            "68010100" => dhcp_renew_no_response += 1,
+            "67061601" => profile_changes += 1,
             _ => {}
+        }
+
+        if let Some((chan, profile)) = extract_us_profile(&e.description) {
+            us_profiles.insert(chan, profile);
+        }
+        if let Some((chan, profile)) = extract_ofdma_profile(&e.description) {
+            ofdma_profiles.insert(chan, profile);
         }
     }
 
@@ -537,11 +569,221 @@ fn render_event_log(out: &mut String, events: &[crate::parser::EventLogEntry]) {
     );
     metric(
         out,
+        "cm3500_event_dhcp_renew_no_response",
+        "DHCP renew sent with no response events in event log",
+        "gauge",
+        &dhcp_renew_no_response.to_string(),
+    );
+    metric(
+        out,
         "cm3500_event_profile_changes",
         "Upstream profile assignment changes in event log",
         "gauge",
         &profile_changes.to_string(),
     );
+
+    if !us_profiles.is_empty() {
+        header(
+            out,
+            "cm3500_event_upstream_active_profile",
+            "Last seen upstream profile ID from modem event log",
+            "gauge",
+        );
+        let mut items = us_profiles.into_iter().collect::<Vec<_>>();
+        items.sort();
+        for (channel, profile) in items {
+            gauge(
+                out,
+                "cm3500_event_upstream_active_profile",
+                &[("channel", &channel)],
+                profile as f64,
+            );
+        }
+    }
+
+    if !ofdma_profiles.is_empty() {
+        header(
+            out,
+            "cm3500_event_ofdma_profile_id",
+            "Last seen OFDM/OFDMA profile ID from modem event log",
+            "gauge",
+        );
+        let mut items = ofdma_profiles.into_iter().collect::<Vec<_>>();
+        items.sort();
+        for (channel, profile) in items {
+            gauge(
+                out,
+                "cm3500_event_ofdma_profile_id",
+                &[("channel", &channel)],
+                profile as f64,
+            );
+        }
+    }
+}
+
+fn extract_us_profile(description: &str) -> Option<(String, u32)> {
+    let channel = description
+        .split("US Chan ID:")
+        .nth(1)?
+        .split(';')
+        .next()?
+        .trim();
+    let profile = description
+        .split("New Profile:")
+        .nth(1)?
+        .split('.')
+        .next()?
+        .trim();
+    Some((channel.to_string(), profile.parse().ok()?))
+}
+
+fn extract_ofdma_profile(description: &str) -> Option<(String, u32)> {
+    let channel = description
+        .split("Chan ID:")
+        .nth(1)?
+        .split(';')
+        .next()?
+        .trim();
+    let profile = description
+        .split("OFDMA Profile ID:")
+        .nth(1)?
+        .split('.')
+        .next()?
+        .trim();
+    Some((channel.to_string(), profile.parse().ok()?))
+}
+
+fn render_product_info(out: &mut String, product: &crate::parser::ProductInfo) {
+    if !product.ethernet_phy_type.is_empty() {
+        labeled_metric(
+            out,
+            "cm3500_product_ethernet_phy_info",
+            "Ethernet PHY type reported by the modem",
+            "gauge",
+            &[("phy_type", &product.ethernet_phy_type)],
+            "1",
+        );
+    }
+
+    if !product.logging_components_enabled.is_empty() {
+        header(
+            out,
+            "cm3500_product_logging_components_enabled",
+            "Number of enabled internal logging components by product debug group",
+            "gauge",
+        );
+        for (group, count) in &product.logging_components_enabled {
+            gauge(
+                out,
+                "cm3500_product_logging_components_enabled",
+                &[("group", group)],
+                *count as f64,
+            );
+        }
+    }
+}
+
+fn render_spectrum(out: &mut String, spectrum: &[crate::parser::SpectrumChunk]) {
+    if spectrum.is_empty() {
+        return;
+    }
+
+    metric(
+        out,
+        "cm3500_spectrum_chunks",
+        "Number of spectrum scan chunks returned by the modem",
+        "gauge",
+        &spectrum.len().to_string(),
+    );
+
+    header(
+        out,
+        "cm3500_spectrum_chunk_power_dbmv",
+        "Spectrum scan chunk power summary in dBmV",
+        "gauge",
+    );
+    header(
+        out,
+        "cm3500_spectrum_chunk_metadata",
+        "Spectrum scan chunk metadata",
+        "gauge",
+    );
+    header(
+        out,
+        "cm3500_spectrum_bin_power_dbmv",
+        "Spectrum scan bin power in dBmV",
+        "gauge",
+    );
+
+    for chunk in spectrum {
+        let Some((&min_raw, &max_raw)) = chunk
+            .bins_raw_tenth_dbmv
+            .iter()
+            .min()
+            .zip(chunk.bins_raw_tenth_dbmv.iter().max())
+        else {
+            continue;
+        };
+        let avg_raw = chunk
+            .bins_raw_tenth_dbmv
+            .iter()
+            .map(|v| *v as f64)
+            .sum::<f64>()
+            / chunk.bins_raw_tenth_dbmv.len() as f64;
+        let center_mhz = format!("{:.3}", chunk.center_freq_hz as f64 / 1_000_000.0);
+
+        for (stat, value) in [
+            ("min", min_raw as f64 / 10.0),
+            ("avg", avg_raw / 10.0),
+            ("max", max_raw as f64 / 10.0),
+        ] {
+            gauge(
+                out,
+                "cm3500_spectrum_chunk_power_dbmv",
+                &[
+                    ("chunk", &chunk.chunk.to_string()),
+                    ("center_mhz", &center_mhz),
+                    ("stat", stat),
+                ],
+                value,
+            );
+        }
+
+        for (kind, value) in [
+            ("span_hz", chunk.span_hz as f64),
+            ("bin_spacing_hz", chunk.bin_spacing_hz as f64),
+            ("resolution_bandwidth", chunk.resolution_bandwidth as f64),
+        ] {
+            gauge(
+                out,
+                "cm3500_spectrum_chunk_metadata",
+                &[
+                    ("chunk", &chunk.chunk.to_string()),
+                    ("center_mhz", &center_mhz),
+                    ("kind", kind),
+                ],
+                value,
+            );
+        }
+
+        let start_hz = chunk.center_freq_hz - (chunk.span_hz / 2);
+        for (idx, raw) in chunk.bins_raw_tenth_dbmv.iter().enumerate() {
+            let freq_hz = start_hz + (idx as i64 * chunk.bin_spacing_hz);
+            gauge(
+                out,
+                "cm3500_spectrum_bin_power_dbmv",
+                &[
+                    ("chunk", &chunk.chunk.to_string()),
+                    ("bin", &idx.to_string()),
+                    (
+                        "frequency_mhz",
+                        &format!("{:.6}", freq_hz as f64 / 1_000_000.0),
+                    ),
+                ],
+                *raw as f64 / 10.0,
+            );
+        }
+    }
 }
 
 fn render_interfaces(out: &mut String, interfaces: &[crate::parser::InterfaceInfo]) {

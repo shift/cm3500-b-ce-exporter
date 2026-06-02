@@ -313,7 +313,9 @@ fn iso_timestamp_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{CmState, DhcpInfo, ScrapedData, ServiceFlowConfig, VersionInfo};
+    use crate::parser::{
+        CmState, DhcpInfo, ProductInfo, ScrapedData, ServiceFlowConfig, SpectrumChunk, VersionInfo,
+    };
 
     #[test]
     fn hysteresis_transitions_to_degraded_before_down() {
@@ -372,6 +374,11 @@ mod tests {
             },
             events: vec![],
             interfaces: vec![],
+            product_info: ProductInfo {
+                ethernet_phy_type: String::new(),
+                logging_components_enabled: vec![],
+            },
+            spectrum: Vec::<SpectrumChunk>::new(),
             cpe_static: 0,
             cpe_dynamic: 0,
             dhcp_state: "bound".into(),

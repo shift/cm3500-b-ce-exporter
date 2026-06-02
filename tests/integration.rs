@@ -11,6 +11,10 @@ fn test_full_pipeline_status_to_metrics() {
     let cm_state_html = include_str!("fixtures/cm_state_cgi.html");
     let event_html = include_str!("fixtures/event_cgi.html");
     let config_params_html = include_str!("fixtures/config_params_cgi.html");
+    let product_html = r#"<tr><td width="160">Ethernet Phy Type</td><td>1x2.5G-GPY21X switch</td></tr>
+        <br><b>[3] COMMON_COMPONENTS</b>: Enabled <br>
+        <table><tr><td>[ 0] CLI: Enabled </td><td>[ 1] ENVOY: Enabled </td></tr></table>"#;
+    let spectrum_html = r#"<script>var spectrum_data = ["1045a640007270e0000000040001c9c300000001fa24fa10fb64fbdc"];</script>"#;
 
     let data = parser::parse_all(
         status_html,
@@ -20,6 +24,8 @@ fn test_full_pipeline_status_to_metrics() {
         cm_state_html,
         event_html,
         config_params_html,
+        product_html,
+        Some(spectrum_html),
         1.5,
     )
     .expect("parse should succeed");
@@ -37,6 +43,8 @@ fn test_full_pipeline_status_to_metrics() {
     assert_eq!(data.interfaces.len(), 1);
     assert_eq!(data.interfaces[0].name, "CABLE");
     assert_eq!(data.interfaces[0].state, "Up");
+    assert_eq!(data.product_info.ethernet_phy_type, "1x2.5G-GPY21X switch");
+    assert_eq!(data.spectrum.len(), 1);
 
     let output = metrics::render_metrics(&data);
 
@@ -52,6 +60,7 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_downstream_ofdm_rxmer_db{"));
     assert!(output.contains("cm3500_upstream_qam_power_dbmv{"));
     assert!(output.contains("cm3500_upstream_ofdma_tx_power_dbmv{"));
+    assert!(output.contains("cm3500_upstream_ofdma_active_subcarrier_range_mhz{"));
     assert!(output.contains("cm3500_dhcp_lease_remaining_seconds"));
     assert!(output.contains("cm3500_dhcp_state{state=\"bound\"}"));
     assert!(output.contains("cm3500_cpe_dynamic 1"));
@@ -59,12 +68,18 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_interface_up{"));
     assert!(output.contains("cm3500_event_log_entries{"));
     assert!(output.contains("cm3500_event_t3_timeouts"));
+    assert!(output.contains("cm3500_event_upstream_active_profile{"));
+    assert!(output.contains("cm3500_event_ofdma_profile_id{"));
     assert!(output.contains("cm3500_docsis_state{"));
     assert!(output.contains("cm3500_bpi_state{"));
     assert!(output.contains("cm3500_tod_state{"));
 
     // Verify service flow config metrics
     assert!(output.contains("cm3500_qos_max_traffic_rate_kbps{"));
+    assert!(output.contains("cm3500_product_ethernet_phy_info{"));
+    assert!(output.contains("cm3500_product_logging_components_enabled{"));
+    assert!(output.contains("cm3500_spectrum_chunks 1"));
+    assert!(output.contains("cm3500_spectrum_bin_power_dbmv{"));
     assert!(output.contains("cm3500_qos_min_reserved_rate_kbps{"));
     assert!(output.contains("cm3500_qos_max_traffic_burst{"));
     assert!(output.contains("cm3500_qos_traffic_priority{"));
@@ -98,6 +113,7 @@ fn test_metrics_format_valid() {
     let cm_state_html = include_str!("fixtures/cm_state_cgi.html");
     let event_html = include_str!("fixtures/event_cgi.html");
     let config_params_html = include_str!("fixtures/config_params_cgi.html");
+    let product_html = "";
 
     let data = parser::parse_all(
         status_html,
@@ -107,6 +123,8 @@ fn test_metrics_format_valid() {
         cm_state_html,
         event_html,
         config_params_html,
+        product_html,
+        None,
         1.0,
     )
     .unwrap();

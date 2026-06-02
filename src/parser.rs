@@ -42,6 +42,8 @@ pub struct UpstreamOfdm {
     pub fft_type: String,
     pub channel_width_mhz: f64,
     pub active_subcarriers: u32,
+    pub first_active_subcarrier_mhz: f64,
+    pub last_active_subcarrier_mhz: f64,
     pub tx_power_dbmv: f64,
 }
 
@@ -118,6 +120,22 @@ pub struct InterfaceInfo {
 }
 
 #[derive(Debug, Clone)]
+pub struct ProductInfo {
+    pub ethernet_phy_type: String,
+    pub logging_components_enabled: Vec<(String, u32)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpectrumChunk {
+    pub chunk: usize,
+    pub center_freq_hz: i64,
+    pub span_hz: i64,
+    pub bin_spacing_hz: i64,
+    pub resolution_bandwidth: i64,
+    pub bins_raw_tenth_dbmv: Vec<i16>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ServiceFlowConfig {
     pub direction: String,
     pub index: u32,
@@ -142,6 +160,8 @@ pub struct ScrapedData {
     pub cm_state: CmState,
     pub events: Vec<EventLogEntry>,
     pub interfaces: Vec<InterfaceInfo>,
+    pub product_info: ProductInfo,
+    pub spectrum: Vec<SpectrumChunk>,
     pub cpe_static: u32,
     pub cpe_dynamic: u32,
     pub dhcp_state: String,
@@ -158,6 +178,8 @@ pub fn parse_all(
     cm_state_html: &str,
     event_html: &str,
     config_params_html: &str,
+    product_html: &str,
+    spectrum_html: Option<&str>,
     scrape_duration_secs: f64,
 ) -> Result<ScrapedData> {
     let (cpe_static, cpe_dynamic) = parse_cpe_counts(status_html);
@@ -175,6 +197,8 @@ pub fn parse_all(
         cm_state: parse_cm_state(cm_state_html),
         events: parse_event_log(event_html),
         interfaces: parse_interfaces(status_html),
+        product_info: parse_product_info(status_html, product_html),
+        spectrum: spectrum_html.map(parse_spectrum_chunks).unwrap_or_default(),
         cpe_static,
         cpe_dynamic,
         service_flow_configs: parse_service_flow_configs(config_params_html),
@@ -246,7 +270,7 @@ fn parse_upstream_qam(html: &str) -> Vec<UpstreamQam> {
 
 fn parse_upstream_ofdm(html: &str) -> Vec<UpstreamOfdm> {
     let re = Regex::new(
-        r"Upstream\s+(\d+)</td><td>(\d+K)</td><td>([\d.]+)</td><td>(\d+)</td><td>([\d.]+)</td><td>([\d.]+)</td><td>(-?[\d.]+)"
+        r"Upstream\s+(\d+)</td><td>(\d+K)</td><td>([\d.]+)</td><td>(\d+)</td><td>([\d.]+)</td><td>([\d.]+)</td><td>(-?[\d.]+)</td><td>(-?[\d.]+)</td><td>(-?[\d.]+)"
     ).unwrap();
 
     re.captures_iter(html)
@@ -256,7 +280,9 @@ fn parse_upstream_ofdm(html: &str) -> Vec<UpstreamOfdm> {
                 fft_type: c[2].to_string(),
                 channel_width_mhz: c[3].parse().ok()?,
                 active_subcarriers: c[4].parse().ok()?,
-                tx_power_dbmv: c[7].parse().ok()?,
+                first_active_subcarrier_mhz: c[5].parse().ok()?,
+                last_active_subcarrier_mhz: c[6].parse().ok()?,
+                tx_power_dbmv: c[9].parse().ok()?,
             })
         })
         .collect()
@@ -505,6 +531,83 @@ fn parse_interfaces(html: &str) -> Vec<InterfaceInfo> {
         .collect()
 }
 
+fn parse_product_info(status_html: &str, product_html: &str) -> ProductInfo {
+    let ethernet_phy_type = Regex::new(r"Ethernet Phy Type</td><td>([^<]+)")
+        .unwrap()
+        .captures(status_html)
+        .or_else(|| {
+            Regex::new(r"Ethernet Phy Type</td><td>([^<]+)")
+                .unwrap()
+                .captures(product_html)
+        })
+        .map(|c| c[1].trim().to_string())
+        .unwrap_or_default();
+
+    let mut logging_components_enabled = Vec::new();
+    let group_re = Regex::new(
+        r#"<br><b>\[(\d+)\]\s*([^<]+)</b>:\s*Enabled\s*<br>\s*<table[^>]*>(.*?)</table>"#,
+    )
+    .unwrap();
+    let enabled_re = Regex::new(r": Enabled").unwrap();
+    for caps in group_re.captures_iter(product_html) {
+        let group = caps[2].trim().to_string();
+        let count = enabled_re.find_iter(&caps[3]).count() as u32;
+        logging_components_enabled.push((group, count));
+    }
+
+    ProductInfo {
+        ethernet_phy_type,
+        logging_components_enabled,
+    }
+}
+
+fn parse_spectrum_chunks(html: &str) -> Vec<SpectrumChunk> {
+    let data_re = Regex::new(r#"var\s+spectrum_data\s*=\s*\[(.*?)\];"#).unwrap();
+    let chunk_re = Regex::new(r#"\"([0-9a-fA-F$]+)\""#).unwrap();
+    let Some(data_caps) = data_re.captures(html) else {
+        return Vec::new();
+    };
+
+    chunk_re
+        .captures_iter(&data_caps[1])
+        .enumerate()
+        .filter_map(|(idx, caps)| parse_spectrum_chunk(idx, &caps[1]))
+        .collect()
+}
+
+fn parse_spectrum_chunk(chunk: usize, raw: &str) -> Option<SpectrumChunk> {
+    let mut pos = usize::from(raw.starts_with('$'));
+    let get2 = |pos: &mut usize| -> Option<i16> {
+        let v = u16::from_str_radix(raw.get(*pos..*pos + 4)?, 16).ok()?;
+        *pos += 4;
+        Some(v as i16)
+    };
+    let get4 = |pos: &mut usize| -> Option<i64> {
+        let v = u32::from_str_radix(raw.get(*pos..*pos + 8)?, 16).ok()?;
+        *pos += 8;
+        Some((v as i32) as i64)
+    };
+
+    let center_freq_hz = get4(&mut pos)?;
+    let span_hz = get4(&mut pos)?;
+    let bins = usize::try_from(get4(&mut pos)?).ok()?;
+    let bin_spacing_hz = get4(&mut pos)?;
+    let resolution_bandwidth = get4(&mut pos)?;
+    let mut bins_raw_tenth_dbmv = Vec::with_capacity(bins);
+    for _ in 0..bins {
+        bins_raw_tenth_dbmv.push(get2(&mut pos)?);
+    }
+
+    Some(SpectrumChunk {
+        chunk,
+        center_freq_hz,
+        span_hz,
+        bin_spacing_hz,
+        resolution_bandwidth,
+        bins_raw_tenth_dbmv,
+    })
+}
+
 fn parse_cpe_counts(html: &str) -> (u32, u32) {
     let re = Regex::new(r"staticCPE\((\d+)\),\s*dynamicCPE\((\d+)\)").unwrap();
     if let Some(c) = re.captures(html) {
@@ -668,5 +771,26 @@ mod tests {
         assert_eq!(flows[1].direction, "Downstream");
         assert_eq!(flows[1].max_traffic_rate_kbps, 128000);
         assert_eq!(flows[2].max_traffic_rate_kbps, 1126400);
+    }
+
+    #[test]
+    fn test_parse_upstream_ofdm_uses_last_numeric_field_as_power() {
+        let html = r#"<tr><td>Upstream 0</td><td>2K</td><td>32.000000</td><td>640</td><td>74</td><td>773</td><td>29.8</td><td>64.8</td><td>37.000000</td></tr>"#;
+        let channels = parse_upstream_ofdm(html);
+        assert_eq!(channels.len(), 1);
+        assert!((channels[0].tx_power_dbmv - 37.0).abs() < 0.01);
+        assert!((channels[0].first_active_subcarrier_mhz - 74.0).abs() < 0.01);
+        assert!((channels[0].last_active_subcarrier_mhz - 773.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_spectrum_chunk() {
+        let chunk = "1045a640007270e0000000040001c9c300000001fa24fa10fb64fbdc";
+        let parsed = parse_spectrum_chunk(0, chunk).unwrap();
+        assert_eq!(parsed.center_freq_hz, 273000000);
+        assert_eq!(parsed.span_hz, 7500000);
+        assert_eq!(parsed.bin_spacing_hz, 117187);
+        assert_eq!(parsed.resolution_bandwidth, 1);
+        assert_eq!(parsed.bins_raw_tenth_dbmv.len(), 4);
     }
 }

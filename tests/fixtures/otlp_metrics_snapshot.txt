@@ -23,6 +23,7 @@ hw.cable_modem.downstream.ofdm.rx_mer
 hw.cable_modem.downstream.ofdm.subcarriers.active
 hw.cable_modem.downstream.power
 hw.cable_modem.downstream.snr
+hw.cable_modem.ethernet.phy.info
 hw.cable_modem.event_log.entries
 hw.cable_modem.provisioning.dhcp.lease.duration
 hw.cable_modem.provisioning.dhcp.lease.remaining
@@ -30,6 +31,7 @@ hw.cable_modem.provisioning.dhcp.rebind.remaining
 hw.cable_modem.provisioning.dhcp.renew.remaining
 hw.cable_modem.provisioning.dhcp.status
 hw.cable_modem.provisioning.dhcp_failures.count
+hw.cable_modem.provisioning.dhcp_renew_no_response.count
 hw.cable_modem.provisioning.dhcp_renew_warnings.count
 hw.cable_modem.qos.max_traffic.burst
 hw.cable_modem.qos.max_traffic.rate
@@ -37,8 +39,11 @@ hw.cable_modem.qos.min_reserved.rate
 hw.cable_modem.qos.packets.count
 hw.cable_modem.qos.traffic.priority
 hw.cable_modem.upstream.ofdma.channel.width
+hw.cable_modem.upstream.ofdma.profile.active
+hw.cable_modem.upstream.ofdma.subcarrier.range
 hw.cable_modem.upstream.ofdma.subcarriers.active
 hw.cable_modem.upstream.power
+hw.cable_modem.upstream.profile.active
 hw.cable_modem.upstream.profile_changes.count
 hw.cable_modem.upstream.symbol_rate
 system.network.interface.status

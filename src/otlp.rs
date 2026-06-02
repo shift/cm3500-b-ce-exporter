@@ -334,6 +334,7 @@ impl OtlpClient {
         let mut us_ofdma_power = Vec::new();
         let mut us_ofdma_width = Vec::new();
         let mut us_ofdma_subcarriers = Vec::new();
+        let mut us_ofdma_subcarrier_range = Vec::new();
         for ch in &data.upstream_ofdm {
             let attrs = vec![
                 int_attr("cable.channel.id", ch.channel as i64),
@@ -346,7 +347,15 @@ impl OtlpClient {
                 attrs.clone(),
                 now,
             ));
-            us_ofdma_subcarriers.push(f64_dp(ch.active_subcarriers as f64, attrs, now));
+            us_ofdma_subcarriers.push(f64_dp(ch.active_subcarriers as f64, attrs.clone(), now));
+            for (edge, value) in [
+                ("first", ch.first_active_subcarrier_mhz),
+                ("last", ch.last_active_subcarrier_mhz),
+            ] {
+                let mut edge_attrs = attrs.clone();
+                edge_attrs.push(str_attr("cable.ofdma.subcarrier.edge", edge));
+                us_ofdma_subcarrier_range.push(f64_dp(value * 1_000_000.0, edge_attrs, now));
+            }
         }
         if !us_ofdma_power.is_empty() {
             metrics.push(gauge(
@@ -366,6 +375,12 @@ impl OtlpClient {
                 "Active upstream OFDMA subcarriers",
                 "1",
                 us_ofdma_subcarriers,
+            ));
+            metrics.push(gauge(
+                "hw.cable_modem.upstream.ofdma.subcarrier.range",
+                "First and last active upstream OFDMA subcarrier positions",
+                "Hz",
+                us_ofdma_subcarrier_range,
             ));
         }
 
@@ -486,15 +501,27 @@ impl OtlpClient {
             let mut t4 = 0u32;
             let mut dhcp_fail = 0u32;
             let mut dhcp_warn = 0u32;
+            let mut dhcp_no_response = 0u32;
             let mut profile_chg = 0u32;
+            let mut us_profiles: std::collections::HashMap<String, u32> =
+                std::collections::HashMap::new();
+            let mut ofdma_profiles: std::collections::HashMap<String, u32> =
+                std::collections::HashMap::new();
             for e in &data.events {
                 match e.event_id.as_str() {
                     "82000200" => t3 += 1,
                     "82000300" => t4 += 1,
                     "68001202" => dhcp_fail += 1,
                     "68010300" => dhcp_warn += 1,
+                    "68010100" => dhcp_no_response += 1,
                     "67061601" => profile_chg += 1,
                     _ => {}
+                }
+                if let Some((chan, profile)) = extract_us_profile(&e.description) {
+                    us_profiles.insert(chan, profile);
+                }
+                if let Some((chan, profile)) = extract_ofdma_profile(&e.description) {
+                    ofdma_profiles.insert(chan, profile);
                 }
             }
             for (name, desc, val) in [
@@ -519,6 +546,11 @@ impl OtlpClient {
                     dhcp_warn,
                 ),
                 (
+                    "hw.cable_modem.provisioning.dhcp_renew_no_response.count",
+                    "DHCP renew no response events in the modem event log",
+                    dhcp_no_response,
+                ),
+                (
                     "hw.cable_modem.upstream.profile_changes.count",
                     "Upstream profile assignment changes in the modem event log",
                     profile_chg,
@@ -531,6 +563,165 @@ impl OtlpClient {
                     vec![f64_dp(val as f64, vec![], now)],
                 ));
             }
+
+            if !us_profiles.is_empty() {
+                let mut dps = Vec::new();
+                let mut items = us_profiles.into_iter().collect::<Vec<_>>();
+                items.sort();
+                for (channel, profile) in items {
+                    dps.push(f64_dp(
+                        profile as f64,
+                        vec![int_attr(
+                            "cable.channel.id",
+                            channel.parse::<u32>().unwrap_or_default() as i64,
+                        )],
+                        now,
+                    ));
+                }
+                metrics.push(gauge(
+                    "hw.cable_modem.upstream.profile.active",
+                    "Last seen upstream profile ID from modem event log",
+                    "1",
+                    dps,
+                ));
+            }
+
+            if !ofdma_profiles.is_empty() {
+                let mut dps = Vec::new();
+                let mut items = ofdma_profiles.into_iter().collect::<Vec<_>>();
+                items.sort();
+                for (channel, profile) in items {
+                    dps.push(f64_dp(
+                        profile as f64,
+                        vec![int_attr(
+                            "cable.channel.id",
+                            channel.parse::<u32>().unwrap_or_default() as i64,
+                        )],
+                        now,
+                    ));
+                }
+                metrics.push(gauge(
+                    "hw.cable_modem.upstream.ofdma.profile.active",
+                    "Last seen OFDM/OFDMA profile ID from modem event log",
+                    "1",
+                    dps,
+                ));
+            }
+        }
+
+        if !data.product_info.ethernet_phy_type.is_empty() {
+            metrics.push(gauge(
+                "hw.cable_modem.ethernet.phy.info",
+                "Ethernet PHY type reported by the modem",
+                "1",
+                vec![f64_dp(
+                    1.0,
+                    vec![str_attr(
+                        "network.ethernet.phy.type",
+                        &data.product_info.ethernet_phy_type,
+                    )],
+                    now,
+                )],
+            ));
+        }
+        if !data.product_info.logging_components_enabled.is_empty() {
+            let dps: Vec<Value> = data
+                .product_info
+                .logging_components_enabled
+                .iter()
+                .map(|(group, count)| {
+                    f64_dp(
+                        *count as f64,
+                        vec![str_attr("cm3500.product.logging.group", group)],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.product.logging_components.enabled",
+                "Number of enabled internal logging components by product debug group",
+                "1",
+                dps,
+            ));
+        }
+        if !data.spectrum.is_empty() {
+            metrics.push(gauge(
+                "hw.cable_modem.spectrum.chunks",
+                "Number of spectrum scan chunks returned by the modem",
+                "1",
+                vec![f64_dp(data.spectrum.len() as f64, vec![], now)],
+            ));
+            let mut chunk_power = Vec::new();
+            let mut chunk_meta = Vec::new();
+            let mut bin_power = Vec::new();
+            for chunk in &data.spectrum {
+                if chunk.bins_raw_tenth_dbmv.is_empty() {
+                    continue;
+                }
+                let min_raw = *chunk.bins_raw_tenth_dbmv.iter().min().unwrap() as f64;
+                let max_raw = *chunk.bins_raw_tenth_dbmv.iter().max().unwrap() as f64;
+                let avg_raw = chunk
+                    .bins_raw_tenth_dbmv
+                    .iter()
+                    .map(|v| *v as f64)
+                    .sum::<f64>()
+                    / chunk.bins_raw_tenth_dbmv.len() as f64;
+                let base_attrs = vec![
+                    int_attr("cm3500.spectrum.chunk", chunk.chunk as i64),
+                    int_attr("cable.spectrum.center_frequency", chunk.center_freq_hz),
+                ];
+                for (stat, value) in [
+                    ("min", min_raw / 10.0),
+                    ("avg", avg_raw / 10.0),
+                    ("max", max_raw / 10.0),
+                ] {
+                    let mut attrs = base_attrs.clone();
+                    attrs.push(str_attr("cable.spectrum.stat", stat));
+                    chunk_power.push(f64_dp(value, attrs, now));
+                }
+                for (kind, value) in [
+                    ("span_hz", chunk.span_hz as f64),
+                    ("bin_spacing_hz", chunk.bin_spacing_hz as f64),
+                    ("resolution_bandwidth", chunk.resolution_bandwidth as f64),
+                ] {
+                    let mut attrs = base_attrs.clone();
+                    attrs.push(str_attr("cable.spectrum.metric", kind));
+                    chunk_meta.push(f64_dp(value, attrs, now));
+                }
+                let start_hz = chunk.center_freq_hz - (chunk.span_hz / 2);
+                for (idx, raw) in chunk.bins_raw_tenth_dbmv.iter().enumerate() {
+                    bin_power.push(f64_dp(
+                        *raw as f64 / 10.0,
+                        vec![
+                            int_attr("cm3500.spectrum.chunk", chunk.chunk as i64),
+                            int_attr("cable.spectrum.bin", idx as i64),
+                            int_attr(
+                                "cable.spectrum.frequency",
+                                start_hz + (idx as i64 * chunk.bin_spacing_hz),
+                            ),
+                        ],
+                        now,
+                    ));
+                }
+            }
+            metrics.push(gauge(
+                "hw.cable_modem.spectrum.chunk.power",
+                "Spectrum scan chunk power summary",
+                "dBmV",
+                chunk_power,
+            ));
+            metrics.push(gauge(
+                "hw.cable_modem.spectrum.chunk.metadata",
+                "Spectrum scan chunk metadata",
+                "1",
+                chunk_meta,
+            ));
+            metrics.push(gauge(
+                "hw.cable_modem.spectrum.bin.power",
+                "Spectrum scan bin power",
+                "dBmV",
+                bin_power,
+            ));
         }
 
         if !data.service_flow_configs.is_empty() {
@@ -921,13 +1112,45 @@ fn extract_suffix_value(description: &str, prefix: &str) -> Option<String> {
     }
 }
 
+fn extract_us_profile(description: &str) -> Option<(String, u32)> {
+    let channel = description
+        .split("US Chan ID:")
+        .nth(1)?
+        .split(';')
+        .next()?
+        .trim();
+    let profile = description
+        .split("New Profile:")
+        .nth(1)?
+        .split('.')
+        .next()?
+        .trim();
+    Some((channel.to_string(), profile.parse().ok()?))
+}
+
+fn extract_ofdma_profile(description: &str) -> Option<(String, u32)> {
+    let channel = description
+        .split("Chan ID:")
+        .nth(1)?
+        .split(';')
+        .next()?
+        .trim();
+    let profile = description
+        .split("OFDMA Profile ID:")
+        .nth(1)?
+        .split('.')
+        .next()?
+        .trim();
+    Some((channel.to_string(), profile.parse().ok()?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::{
         CmState, DhcpInfo, DocsisPhase, DownstreamOfdm, DownstreamQam, EventLogEntry,
-        InterfaceInfo, QosFlow, ScrapedData, ServiceFlowConfig, UpstreamOfdm, UpstreamQam,
-        VersionInfo,
+        InterfaceInfo, ProductInfo, QosFlow, ScrapedData, ServiceFlowConfig, SpectrumChunk,
+        UpstreamOfdm, UpstreamQam, VersionInfo,
     };
 
     #[test]
@@ -986,8 +1209,30 @@ mod tests {
         assert!(has_metric(metrics, "hw.cable_modem.downstream.ofdm.rx_mer"));
         assert!(has_metric(
             metrics,
+            "hw.cable_modem.upstream.ofdma.subcarrier.range"
+        ));
+        assert!(has_metric(
+            metrics,
             "hw.cable_modem.provisioning.dhcp_failures.count"
         ));
+        assert!(has_metric(
+            metrics,
+            "hw.cable_modem.provisioning.dhcp_renew_no_response.count"
+        ));
+        assert!(has_metric(
+            metrics,
+            "hw.cable_modem.upstream.profile.active"
+        ));
+        assert!(has_metric(
+            metrics,
+            "hw.cable_modem.upstream.ofdma.profile.active"
+        ));
+        assert!(has_metric(metrics, "hw.cable_modem.ethernet.phy.info"));
+        assert!(has_metric(
+            metrics,
+            "hw.cable_modem.product.logging_components.enabled"
+        ));
+        assert!(has_metric(metrics, "hw.cable_modem.spectrum.bin.power"));
         assert!(has_metric(metrics, "hw.cable_modem.qos.max_traffic.rate"));
 
         let rx_mer = metric(metrics, "hw.cable_modem.downstream.ofdm.rx_mer");
@@ -1004,7 +1249,7 @@ mod tests {
         let records = first["resourceLogs"][0]["scopeLogs"][0]["logRecords"]
             .as_array()
             .unwrap();
-        assert_eq!(records.len(), 2);
+        assert_eq!(records.len(), 5);
         let first_record = &records[0];
         assert_eq!(first_record["severityText"].as_str().unwrap(), "WARN");
         assert_eq!(
@@ -1105,6 +1350,8 @@ mod tests {
             include_str!("../tests/fixtures/cm_state_cgi.html"),
             include_str!("../tests/fixtures/event_cgi.html"),
             include_str!("../tests/fixtures/config_params_cgi.html"),
+            "",
+            None,
             1.5,
         )
         .unwrap()
@@ -1252,6 +1499,8 @@ mod tests {
                 fft_type: "4K".into(),
                 channel_width_mhz: 96.0,
                 active_subcarriers: 1800,
+                first_active_subcarrier_mhz: 74.0,
+                last_active_subcarrier_mhz: 170.0,
                 tx_power_dbmv: 43.0,
             }],
             uptime_seconds: Some(3600),
@@ -1306,12 +1555,42 @@ mod tests {
                     event_level: 4,
                     description: "DHCP failed - Solicit sent, No Advertise received".into(),
                 },
+                EventLogEntry {
+                    timestamp: "6/2/2026 7:13".into(),
+                    event_id: "68010100".into(),
+                    event_level: 4,
+                    description: "DHCP RENEW sent - No response for IPv4".into(),
+                },
+                EventLogEntry {
+                    timestamp: "6/2/2026 7:14".into(),
+                    event_id: "67061601".into(),
+                    event_level: 6,
+                    description: "US profile assignment change.  US Chan ID: 10; Previous Profile: 9; New Profile: 12.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;".into(),
+                },
+                EventLogEntry {
+                    timestamp: "6/2/2026 7:15".into(),
+                    event_id: "74010100".into(),
+                    event_level: 6,
+                    description: "CM-STATUS message sent.  Event Type Code: 16; Chan ID: 33; DSID: N/A; MAC Addr: N/A; OFDM/OFDMA Profile ID: 2.;CM-MAC=aa:bb:cc:dd:ee:ff;CMTS-MAC=11:22:33:44:55:66;".into(),
+                },
             ],
             interfaces: vec![InterfaceInfo {
                 name: "WAN0".into(),
                 provisioned: "Yes".into(),
                 state: "Up".into(),
                 mac_address: "aa:bb:cc:dd:ee:ff".into(),
+            }],
+            product_info: ProductInfo {
+                ethernet_phy_type: "1x2.5G-GPY21X switch".into(),
+                logging_components_enabled: vec![("COMMON_COMPONENTS".into(), 2)],
+            },
+            spectrum: vec![SpectrumChunk {
+                chunk: 0,
+                center_freq_hz: 273_000_000,
+                span_hz: 7_500_000,
+                bin_spacing_hz: 117_187,
+                resolution_bandwidth: 1,
+                bins_raw_tenth_dbmv: vec![-1500, -1400, -1300],
             }],
             cpe_static: 0,
             cpe_dynamic: 1,
