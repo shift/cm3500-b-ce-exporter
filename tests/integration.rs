@@ -75,12 +75,12 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_tod_state{"));
 
     // Verify service flow config metrics
-    assert!(output.contains("cm3500_qos_max_traffic_rate_kbps{"));
+    assert!(output.contains("cm3500_qos_max_traffic_rate_bps{"));
     assert!(output.contains("cm3500_product_ethernet_phy_info{"));
     assert!(output.contains("cm3500_product_logging_components_enabled{"));
     assert!(output.contains("cm3500_spectrum_chunks 1"));
     assert!(output.contains("cm3500_spectrum_bin_power_dbmv{"));
-    assert!(output.contains("cm3500_qos_min_reserved_rate_kbps{"));
+    assert!(output.contains("cm3500_qos_min_reserved_rate_bps{"));
     assert!(output.contains("cm3500_qos_max_traffic_burst{"));
     assert!(output.contains("cm3500_qos_traffic_priority{"));
     assert!(output.contains("direction=\"Upstream\""));

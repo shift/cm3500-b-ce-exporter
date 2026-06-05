@@ -836,37 +836,37 @@ fn render_service_flow_configs(out: &mut String, flows: &[crate::parser::Service
 
     header(
         out,
-        "cm3500_qos_max_traffic_rate_kbps",
-        "Maximum traffic rate for the QoS service flow from config (kbps)",
+        "cm3500_qos_max_traffic_rate_bps",
+        "Maximum traffic rate for the QoS service flow from config (bps)",
         "gauge",
     );
     for f in flows {
         gauge(
             out,
-            "cm3500_qos_max_traffic_rate_kbps",
+            "cm3500_qos_max_traffic_rate_bps",
             &[
                 ("direction", &f.direction),
                 ("flow_index", &f.index.to_string()),
             ],
-            f.max_traffic_rate_kbps as f64,
+            f.max_traffic_rate_bps as f64,
         );
     }
 
     header(
         out,
-        "cm3500_qos_min_reserved_rate_kbps",
-        "Minimum reserved rate for the QoS service flow from config (kbps)",
+        "cm3500_qos_min_reserved_rate_bps",
+        "Minimum reserved rate for the QoS service flow from config (bps)",
         "gauge",
     );
     for f in flows {
         gauge(
             out,
-            "cm3500_qos_min_reserved_rate_kbps",
+            "cm3500_qos_min_reserved_rate_bps",
             &[
                 ("direction", &f.direction),
                 ("flow_index", &f.index.to_string()),
             ],
-            f.min_reserved_rate_kbps as f64,
+            f.min_reserved_rate_bps as f64,
         );
     }
 

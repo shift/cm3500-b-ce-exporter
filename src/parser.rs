@@ -139,9 +139,9 @@ pub struct SpectrumChunk {
 pub struct ServiceFlowConfig {
     pub direction: String,
     pub index: u32,
-    pub max_traffic_rate_kbps: u64,
+    pub max_traffic_rate_bps: u64,
     pub max_traffic_burst: u64,
-    pub min_reserved_rate_kbps: u64,
+    pub min_reserved_rate_bps: u64,
     pub traffic_priority: u32,
     pub scheduling_type: u32,
 }
@@ -672,9 +672,9 @@ fn parse_service_flow_configs(html: &str) -> Vec<ServiceFlowConfig> {
         flows.push(ServiceFlowConfig {
             direction,
             index: i as u32,
-            max_traffic_rate_kbps: max_rate,
+            max_traffic_rate_bps: max_rate,
             max_traffic_burst: max_burst,
-            min_reserved_rate_kbps: min_rate,
+            min_reserved_rate_bps: min_rate,
             traffic_priority: priority,
             scheduling_type: sched,
         });
@@ -766,11 +766,11 @@ mod tests {
         let flows = parse_service_flow_configs(html);
         assert_eq!(flows.len(), 3);
         assert_eq!(flows[0].direction, "Upstream");
-        assert_eq!(flows[0].max_traffic_rate_kbps, 128000);
+        assert_eq!(flows[0].max_traffic_rate_bps, 128000);
         assert_eq!(flows[0].scheduling_type, 2);
         assert_eq!(flows[1].direction, "Downstream");
-        assert_eq!(flows[1].max_traffic_rate_kbps, 128000);
-        assert_eq!(flows[2].max_traffic_rate_kbps, 1126400);
+        assert_eq!(flows[1].max_traffic_rate_bps, 128000);
+        assert_eq!(flows[2].max_traffic_rate_bps, 1126400);
     }
 
     #[test]

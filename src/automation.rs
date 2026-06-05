@@ -282,7 +282,7 @@ fn max_rate_bps(flows: &[crate::parser::ServiceFlowConfig], direction: &str) -> 
     flows
         .iter()
         .filter(|f| f.direction.eq_ignore_ascii_case(direction))
-        .map(|f| f.max_traffic_rate_kbps.saturating_mul(1000))
+        .map(|f| f.max_traffic_rate_bps)
         .max()
 }
 
@@ -386,27 +386,27 @@ mod tests {
                 ServiceFlowConfig {
                     direction: "Upstream".into(),
                     index: 0,
-                    max_traffic_rate_kbps: 128000,
+                    max_traffic_rate_bps: 128000,
                     max_traffic_burst: 0,
-                    min_reserved_rate_kbps: 0,
+                    min_reserved_rate_bps: 0,
                     traffic_priority: 0,
                     scheduling_type: 0,
                 },
                 ServiceFlowConfig {
                     direction: "Downstream".into(),
                     index: 1,
-                    max_traffic_rate_kbps: 128000,
+                    max_traffic_rate_bps: 128000,
                     max_traffic_burst: 0,
-                    min_reserved_rate_kbps: 0,
+                    min_reserved_rate_bps: 0,
                     traffic_priority: 0,
                     scheduling_type: 0,
                 },
                 ServiceFlowConfig {
                     direction: "Downstream".into(),
                     index: 2,
-                    max_traffic_rate_kbps: 1126400,
+                    max_traffic_rate_bps: 1126400,
                     max_traffic_burst: 0,
-                    min_reserved_rate_kbps: 0,
+                    min_reserved_rate_bps: 0,
                     traffic_priority: 0,
                     scheduling_type: 0,
                 },
@@ -415,9 +415,9 @@ mod tests {
         };
 
         let capacity = CapacitySemantic::from_data(&data, 95);
-        assert_eq!(capacity.upstream_bps, Some(128_000_000));
-        assert_eq!(capacity.downstream_bps, Some(1_126_400_000));
-        assert_eq!(capacity.shaped_upstream_bps, Some(121_600_000));
-        assert_eq!(capacity.shaped_downstream_bps, Some(1_070_080_000));
+        assert_eq!(capacity.upstream_bps, Some(128_000));
+        assert_eq!(capacity.downstream_bps, Some(1_126_400));
+        assert_eq!(capacity.shaped_upstream_bps, Some(121_600));
+        assert_eq!(capacity.shaped_downstream_bps, Some(1_070_080));
     }
 }

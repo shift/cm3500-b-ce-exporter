@@ -730,7 +730,7 @@ impl OtlpClient {
                 .iter()
                 .map(|f| {
                     f64_dp(
-                        f.max_traffic_rate_kbps as f64 * 1000.0,
+                        f.max_traffic_rate_bps as f64,
                         vec![
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
@@ -744,7 +744,7 @@ impl OtlpClient {
                 .iter()
                 .map(|f| {
                     f64_dp(
-                        f.min_reserved_rate_kbps as f64 * 1000.0,
+                        f.min_reserved_rate_bps as f64,
                         vec![
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
@@ -1598,9 +1598,9 @@ mod tests {
             service_flow_configs: vec![ServiceFlowConfig {
                 direction: "Downstream".into(),
                 index: 0,
-                max_traffic_rate_kbps: 1126400,
+                max_traffic_rate_bps: 1126400,
                 max_traffic_burst: 3044,
-                min_reserved_rate_kbps: 0,
+                min_reserved_rate_bps: 0,
                 traffic_priority: 1,
                 scheduling_type: 2,
             }],
