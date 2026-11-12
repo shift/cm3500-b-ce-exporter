@@ -38,6 +38,10 @@ pub fn render_metrics(data: &ScrapedData, capacity_margin_percent: u8) -> String
             ("serial", &data.version_info.serial),
             ("firmware", &data.version_info.software_rev),
             ("firmware_name", &data.version_info.firmware_name),
+            (
+                "firmware_build_time",
+                &data.version_info.firmware_build_time,
+            ),
             ("bootloader", &data.version_info.bootloader),
             ("hardware_rev", &data.version_info.hardware_rev),
             ("vendor", &data.version_info.vendor),
@@ -477,6 +481,28 @@ fn render_upstream_ofdm(out: &mut String, channels: &[crate::parser::UpstreamOfd
                 &[("channel", &ch.channel.to_string()), ("edge", edge)],
                 value,
             );
+        }
+    }
+
+    if channels.iter().any(|ch| !ch.unlabeled_values.is_empty()) {
+        header(
+            out,
+            "cm3500_upstream_ofdma_unlabeled_value",
+            "Upstream OFDMA values present in the modem row but not named by its table header",
+            "gauge",
+        );
+        for ch in channels {
+            for (index, value) in ch.unlabeled_values.iter().enumerate() {
+                gauge(
+                    out,
+                    "cm3500_upstream_ofdma_unlabeled_value",
+                    &[
+                        ("channel", &ch.channel.to_string()),
+                        ("column_index", &(index + 7).to_string()),
+                    ],
+                    *value,
+                );
+            }
         }
     }
 }
@@ -1472,6 +1498,10 @@ fn render_dhcp_log(out: &mut String, entries: &[crate::parser::DhcpLogEntry]) {
                 ),
                 ("t1", &entry.t1.map(|v| v.to_string()).unwrap_or_default()),
                 ("t2", &entry.t2.map(|v| v.to_string()).unwrap_or_default()),
+                (
+                    "ia_count",
+                    &entry.ia_count.map(|v| v.to_string()).unwrap_or_default(),
+                ),
                 (
                     "ia_addr_count",
                     &entry

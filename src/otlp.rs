@@ -70,19 +70,24 @@ impl OtlpClient {
         self.resource_attrs.lock().unwrap().clone()
     }
 
-    pub async fn push(&self, data: &ScrapedData) -> Result<()> {
+    pub async fn push(&self, data: &ScrapedData, capacity_margin_percent: u8) -> Result<()> {
         self.enrich_from_data(data);
-        self.push_metrics(data).await?;
+        self.push_metrics(data, capacity_margin_percent).await?;
         self.push_logs(data).await?;
         Ok(())
     }
 
-    async fn push_metrics(&self, data: &ScrapedData) -> Result<()> {
-        let body = self.build_metrics_body(data, &now_nanos());
+    async fn push_metrics(&self, data: &ScrapedData, capacity_margin_percent: u8) -> Result<()> {
+        let body = self.build_metrics_body(data, &now_nanos(), capacity_margin_percent);
         self.post_json(&self.metrics_endpoint, &body).await
     }
 
-    fn build_metrics_body(&self, data: &ScrapedData, now: &str) -> Value {
+    fn build_metrics_body(
+        &self,
+        data: &ScrapedData,
+        now: &str,
+        capacity_margin_percent: u8,
+    ) -> Value {
         let boot_nanos = boot_time_nanos(data.uptime_seconds, now);
         let counter_start = boot_nanos.as_deref().unwrap_or(now);
         let mut metrics: Vec<Value> = Vec::new();
@@ -105,6 +110,57 @@ impl OtlpClient {
             "1",
             vec![f64_dp(1.0, vec![], now)],
         ));
+        let section_parse = data
+            .parse_status
+            .iter()
+            .map(|(section, ok)| {
+                f64_dp(
+                    if ok { 1.0 } else { 0.0 },
+                    vec![str_attr("cm3500.section", section)],
+                    now,
+                )
+            })
+            .collect();
+        metrics.push(gauge(
+            "cm3500.exporter.section_parse.success",
+            "Whether each modem response section parsed successfully",
+            "1",
+            section_parse,
+        ));
+
+        for (direction, label) in [("Upstream", "upstream"), ("Downstream", "downstream")] {
+            let max_bps = data
+                .service_flow_configs
+                .iter()
+                .filter(|f| f.direction.eq_ignore_ascii_case(direction))
+                .map(|f| f.max_traffic_rate_bps)
+                .max();
+            let Some(provisioned) = max_bps else {
+                continue;
+            };
+            let estimated = provisioned.saturating_mul(capacity_margin_percent as u64) / 100;
+            let attrs = vec![
+                str_attr("cable.qos.direction", label),
+                str_attr("cable.qos.basis", "max_individual_service_flow_rate"),
+            ];
+            metrics.push(gauge(
+                "hw.cable_modem.capacity.provisioned",
+                "Highest individual provisioned service-flow rate",
+                "bit/s",
+                vec![f64_dp(provisioned as f64, attrs.clone(), now)],
+            ));
+            let mut estimated_attrs = attrs;
+            estimated_attrs.push(int_attr(
+                "cm3500.capacity.margin_percent",
+                capacity_margin_percent as i64,
+            ));
+            metrics.push(gauge(
+                "hw.cable_modem.capacity.estimated",
+                "Estimated usable capacity after applying the configured margin",
+                "bit/s",
+                vec![f64_dp(estimated as f64, estimated_attrs, now)],
+            ));
+        }
 
         if let Some(uptime) = data.uptime_seconds {
             metrics.push(sum(
@@ -454,6 +510,7 @@ impl OtlpClient {
         let mut us_ofdma_width = Vec::new();
         let mut us_ofdma_subcarriers = Vec::new();
         let mut us_ofdma_subcarrier_range = Vec::new();
+        let mut us_ofdma_unlabeled = Vec::new();
         for ch in &data.upstream_ofdm {
             let attrs = vec![
                 int_attr("cable.channel.id", ch.channel as i64),
@@ -474,6 +531,14 @@ impl OtlpClient {
                 let mut edge_attrs = attrs.clone();
                 edge_attrs.push(str_attr("cable.ofdma.subcarrier.edge", edge));
                 us_ofdma_subcarrier_range.push(f64_dp(value * 1_000_000.0, edge_attrs, now));
+            }
+            for (index, value) in ch.unlabeled_values.iter().enumerate() {
+                let mut value_attrs = attrs.clone();
+                value_attrs.push(int_attr(
+                    "cable.ofdma.unlabeled_column_index",
+                    index as i64 + 7,
+                ));
+                us_ofdma_unlabeled.push(f64_dp(*value, value_attrs, now));
             }
         }
         if !us_ofdma_power.is_empty() {
@@ -501,6 +566,14 @@ impl OtlpClient {
                 "Hz",
                 us_ofdma_subcarrier_range,
             ));
+            if !us_ofdma_unlabeled.is_empty() {
+                metrics.push(gauge(
+                    "hw.cable_modem.upstream.ofdma.unlabeled_value",
+                    "Upstream OFDMA row values not named by the modem table header",
+                    "1",
+                    us_ofdma_unlabeled,
+                ));
+            }
         }
 
         if !data.qos_flows.is_empty() {
@@ -1436,6 +1509,9 @@ impl OtlpClient {
             if let Some(value) = entry.ia_type {
                 attrs.push(int_attr("cable_modem.dhcp.log.ia_type", value as i64));
             }
+            if let Some(value) = entry.ia_count {
+                attrs.push(int_attr("cable_modem.dhcp.log.ia_count", value as i64));
+            }
             if let Some(value) = entry.ia_addr_count {
                 attrs.push(int_attr("cable_modem.dhcp.log.ia_addr_count", value as i64));
             }
@@ -1601,6 +1677,10 @@ fn build_resource_attrs(data: Option<&ScrapedData>, modem_url: Option<&str>) -> 
             str_attr("network.connection.type", "cable"),
             str_attr("cm3500.firmware.version", &data.version_info.software_rev),
             str_attr("cm3500.firmware.name", &data.version_info.firmware_name),
+            str_attr(
+                "cm3500.firmware.build_time",
+                &data.version_info.firmware_build_time,
+            ),
         ];
     }
 
@@ -1782,7 +1862,7 @@ mod tests {
     fn builds_otlp_metrics_payload_with_expected_names_and_resources() {
         let data = sample_data();
         let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
-        let body = client.build_metrics_body(&data, "1000000000");
+        let body = client.build_metrics_body(&data, "1000000000", 95);
 
         let resource_attrs = &body["resourceMetrics"][0]["resource"]["attributes"];
         assert!(has_attr(resource_attrs, "service.name", "cm3500-exporter"));
@@ -1884,6 +1964,7 @@ mod tests {
             ia_id: Some(-763769691),
             t1: Some(172800),
             t2: Some(483840),
+            ia_count: Some(1),
             ia_addr_count: Some(1),
             stateful_addr: "2a02:8101:1130:d::c2a".into(),
             preferred_lifetime: Some(604800),
@@ -1915,10 +1996,47 @@ mod tests {
     }
 
     #[test]
+    fn otlp_counter_start_time_tracks_modem_reboot() {
+        let mut data = sample_data();
+        data.uptime_seconds = Some(3600);
+        let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
+        let before = client.build_metrics_body(&data, "1000000000000000000", 95);
+        let before_metric = metric(
+            before["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]
+                .as_array()
+                .unwrap(),
+            "hw.cable_modem.downstream.octets",
+        );
+        let before_start = before_metric["sum"]["dataPoints"][0]["startTimeUnixNano"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Five minutes later the modem has rebooted and its uptime is 10s.
+        data.uptime_seconds = Some(10);
+        let after = client.build_metrics_body(&data, "1000000300000000000", 95);
+        let after_metric = metric(
+            after["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]
+                .as_array()
+                .unwrap(),
+            "hw.cable_modem.downstream.octets",
+        );
+        let after_start = after_metric["sum"]["dataPoints"][0]["startTimeUnixNano"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        assert_ne!(before_start, after_start);
+        let before_start: u128 = before_start.parse().unwrap();
+        let after_start: u128 = after_start.parse().unwrap();
+        assert!(after_start > before_start);
+    }
+
+    #[test]
     fn otlp_metrics_fixture_snapshot() {
         let data = fixture_data();
         let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
-        let body = client.build_metrics_body(&data, "1000000000");
+        let body = client.build_metrics_body(&data, "1000000000", 95);
         let snapshot = metrics_snapshot_summary(&body);
         assert_eq!(
             snapshot,
@@ -1944,12 +2062,12 @@ mod tests {
         let client =
             OtlpClient::new_fallback("https://example.test/otlp", vec![], "https://192.168.100.1");
 
-        let before = client.build_metrics_body(&data, "1000000000");
+        let before = client.build_metrics_body(&data, "1000000000", 95);
         let before_attrs = &before["resourceMetrics"][0]["resource"]["attributes"];
         assert!(has_attr(before_attrs, "hw.device.id", "unknown"));
 
         client.enrich_from_data(&data);
-        let after = client.build_metrics_body(&data, "1000000001");
+        let after = client.build_metrics_body(&data, "1000000001", 95);
         let after_attrs = &after["resourceMetrics"][0]["resource"]["attributes"];
         assert!(has_attr(after_attrs, "hw.device.id", "aa:bb:cc:dd:ee:ff"));
     }
@@ -2146,6 +2264,7 @@ mod tests {
                 active_subcarriers: 1800,
                 first_active_subcarrier_mhz: 74.0,
                 last_active_subcarrier_mhz: 170.0,
+                unlabeled_values: vec![29.8, 64.8],
                 tx_power_dbmv: 43.0,
             }],
             uptime_seconds: Some(3600),

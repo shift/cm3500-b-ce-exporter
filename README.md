@@ -43,6 +43,10 @@ The certificate is valid for twenty years, so the fingerprint is stable. If a
 firmware update replaces it, the exporter will fail TLS verification until the
 fingerprint is updated. That failure is intentional.
 
+For Compose, set `MODEM_TLS_FINGERPRINT` in `.env`. When it is empty the
+exporter falls back to `--insecure-tls`; when set, the fingerprint takes
+precedence and the insecure flag is ignored with a warning.
+
 ### Docker Compose (full stack)
 
 ```bash
@@ -182,6 +186,9 @@ Capacity semantics:
   assumption against your provider's configuration before using these values for
   shaping decisions.
 
+OTLP exposes the same values as `hw.cable_modem.capacity.provisioned` and
+`hw.cable_modem.capacity.estimated`.
+
 Files are written atomically and only rewritten when their semantic content changes, making them suitable for `systemd.path` or other file-watch based automation.
 
 Example systemd integration files are provided in [`examples/systemd/`](examples/systemd/).
@@ -247,7 +254,7 @@ and rotate these files accordingly.
 | `cm3500_parse_success` | gauge | Whether the required modem page fields parsed |
 | `cm3500_section_parse_success` | gauge | Per-section parse status (label: `section`) |
 | `cm3500_scrape_duration_seconds` | gauge | Duration of the last scrape |
-| `cm3500_info` | gauge | Modem hardware/firmware info (labels: model, serial, firmware, etc.) |
+| `cm3500_info` | gauge | Modem hardware/firmware info, including firmware build time (labels: model, serial, firmware, etc.) |
 | `cm3500_uptime_seconds` | gauge | System uptime in seconds |
 | `cm3500_cm_status` | gauge | Operational status label |
 | `cm3500_interface_up` | gauge | Interface operational status (1 = Up) |
@@ -324,6 +331,7 @@ and rotate these files accordingly.
 | `cm3500_upstream_ofdma_channel_width_mhz` | gauge | channel | Channel width in MHz |
 | `cm3500_upstream_ofdma_active_subcarriers` | gauge | channel | Number of active subcarriers |
 | `cm3500_upstream_ofdma_active_subcarrier_range_mhz` | gauge | channel, edge | First/last active subcarrier positions |
+| `cm3500_upstream_ofdma_unlabeled_value` | gauge | channel, column_index | Row values present in the modem table but not named by its header |
 
 ### QoS & DOCSIS State
 
@@ -411,7 +419,10 @@ Two sets of alert rules and dashboards are provided:
 
 ### Prometheus Rules
 
-Always load `alert_rules_common.yml`, then choose **one** plant-specific file:
+`alert_rules_common.yml` includes parser-health alerts
+(`cm3500_parse_success` and per-section failures), modem availability, reboot,
+and interface/event-log checks. Always load it, then choose **one**
+plant-specific file:
 
 - `alert_rules_eurodocsis.yml` — Vodafone DE, Liberty Global, Virgin Media O2, etc.
 - `alert_rules_docsis_us.yml` — Comcast, Spectrum, Cox, etc.

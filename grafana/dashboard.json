@@ -725,6 +725,111 @@
       "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "super-light-blue" } } },
       "options": { "xTickLabelRotation": 45, "groupWidth": 0.7, "barWidth": 0.9 },
       "description": "Internal logging component counts by debug group. Useful for firmware diagnostics."
+    },
+    {
+      "title": "Exporter Health & New Telemetry",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 89 },
+      "collapsed": false
+    },
+    {
+      "title": "Parser Health",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 90 },
+      "targets": [
+        { "expr": "cm3500_parse_success", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "PARSE FAILED", "color": "red" }, "1": { "text": "OK", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "description": "Whether the required modem page fields parsed. cm3500_up also drops to 0 when this fails."
+    },
+    {
+      "title": "Section Parse Status",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 8, "x": 4, "y": 90 },
+      "targets": [
+        { "expr": "cm3500_section_parse_success", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "OK", "section": "Section" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "FAILED", "color": "red" }, "1": { "text": "OK", "color": "green" } } }
+          ]
+        }
+      },
+      "description": "Per-section parser status. A single failing optional section no longer hides the rest of the scrape."
+    },
+    {
+      "title": "Provisioned vs Estimated Capacity",
+      "type": "bargauge",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 90 },
+      "targets": [
+        { "expr": "cm3500_capacity_provisioned_bps", "refId": "A", "instant": true, "legendFormat": "{{direction}} provisioned" },
+        { "expr": "cm3500_capacity_estimated_bps", "refId": "B", "instant": true, "legendFormat": "{{direction}} estimated ({{margin_percent}}%)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bps" } },
+      "options": { "displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true },
+      "description": "Highest individual provisioned service-flow rate per direction, and the margin-adjusted estimate. Not measured throughput."
+    },
+    {
+      "title": "DHCPv6 Log Message Types",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 96 },
+      "targets": [
+        { "expr": "cm3500_dhcp_log_message_type_entries", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Entries", "message_type": "Message Type" }
+          }
+        }
+      ],
+      "description": "DHCPv6 log entries currently exposed by the modem, grouped by message type."
+    },
+    {
+      "title": "DSX Log Entries",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 96 },
+      "targets": [
+        { "expr": "cm3500_dsx_log_entries", "refId": "A", "instant": true }
+      ],
+      "description": "Number of DSX message log entries. Currently expected to be 0 unless the modem has logged DSX activity."
+    },
+    {
+      "title": "DHCPv6 Log Entries",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 96 },
+      "targets": [
+        { "expr": "cm3500_dhcp_log_entry_info", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true, "Value": true, "client_id": true, "server_id": true, "options": true },
+            "renameByName": { "index": "#", "timestamp": "Time", "message_type": "Type", "stateful_addr": "Address", "preferred_lifetime_seconds": "Preferred (s)", "valid_lifetime_seconds": "Valid (s)" }
+          }
+        }
+      ],
+      "description": "DHCPv6 log entries with address and lifetime details."
     }
   ],
   "refresh": "30s",

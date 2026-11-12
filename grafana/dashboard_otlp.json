@@ -707,6 +707,111 @@
           { "matcher": { "id": "byName", "options": "Interface" }, "properties": [ { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } } ] }
         ]
       }
+    },
+    {
+      "title": "Exporter Health & New Telemetry",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 89 },
+      "collapsed": false
+    },
+    {
+      "title": "Parser Health",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 90 },
+      "targets": [
+        { "expr": "cm3500_exporter_parse_success", "refId": "A", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "PARSE FAILED", "color": "red" }, "1": { "text": "OK", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "description": "Whether the required modem page fields parsed."
+    },
+    {
+      "title": "Section Parse Status",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 8, "x": 4, "y": 90 },
+      "targets": [
+        { "expr": "cm3500_exporter_section_parse_success", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "OK", "cm3500_section": "Section" }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "FAILED", "color": "red" }, "1": { "text": "OK", "color": "green" } } }
+          ]
+        }
+      },
+      "description": "Per-section parser status from OTLP metrics."
+    },
+    {
+      "title": "Provisioned vs Estimated Capacity",
+      "type": "bargauge",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 90 },
+      "targets": [
+        { "expr": "hw_cable_modem_capacity_provisioned", "refId": "A", "instant": true, "legendFormat": "{{cable_qos_direction}} provisioned" },
+        { "expr": "hw_cable_modem_capacity_estimated", "refId": "B", "instant": true, "legendFormat": "{{cable_qos_direction}} estimated ({{cm3500_capacity_margin_percent}}%)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bps" } },
+      "options": { "displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true },
+      "description": "Highest individual provisioned service-flow rate per direction and the margin-adjusted estimate. Not measured throughput."
+    },
+    {
+      "title": "DHCPv6 Log Message Types",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 96 },
+      "targets": [
+        { "expr": "hw_cable_modem_provisioning_dhcp_log_message_type_entries", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": { "Value": "Entries", "dhcp_message_type": "Message Type" }
+          }
+        }
+      ],
+      "description": "DHCPv6 log entries grouped by message type."
+    },
+    {
+      "title": "DSX Log Entries",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 96 },
+      "targets": [
+        { "expr": "hw_cable_modem_dsx_log_entries", "refId": "A", "instant": true }
+      ],
+      "description": "Number of DSX message log entries."
+    },
+    {
+      "title": "DHCPv6 Log Entries",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 96 },
+      "targets": [
+        { "expr": "hw_cable_modem_provisioning_dhcp_log_entry_info", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true, "Value": true },
+            "renameByName": { "dhcp_log_index": "#", "dhcp_log_timestamp": "Time", "dhcp_log_message_type": "Type", "dhcp_log_stateful_addr": "Address", "dhcp_log_preferred_lifetime": "Preferred (s)", "dhcp_log_valid_lifetime": "Valid (s)" }
+          }
+        }
+      ],
+      "description": "DHCPv6 log entries with address and lifetime details."
     }
   ],
   "refresh": "30s",

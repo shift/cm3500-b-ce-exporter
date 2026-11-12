@@ -47,6 +47,8 @@ pub struct UpstreamOfdm {
     pub active_subcarriers: u32,
     pub first_active_subcarrier_mhz: f64,
     pub last_active_subcarrier_mhz: f64,
+    /// Values present in the HTML row but not named by the table header.
+    pub unlabeled_values: Vec<f64>,
     pub tx_power_dbmv: f64,
 }
 
@@ -240,6 +242,7 @@ pub struct DhcpLogEntry {
     pub ia_id: Option<i64>,
     pub t1: Option<u64>,
     pub t2: Option<u64>,
+    pub ia_count: Option<u32>,
     pub ia_addr_count: Option<u32>,
     pub stateful_addr: String,
     pub preferred_lifetime: Option<u64>,
@@ -597,6 +600,10 @@ fn parse_upstream_ofdm_row(cells: &[String]) -> Option<UpstreamOfdm> {
         active_subcarriers: cells[3].parse().ok()?,
         first_active_subcarrier_mhz: cells[4].parse().ok()?,
         last_active_subcarrier_mhz: cells[5].parse().ok()?,
+        unlabeled_values: cells[6..8]
+            .iter()
+            .filter_map(|cell| cell.parse().ok())
+            .collect(),
         tx_power_dbmv: cells[8].parse().ok()?,
     })
 }
@@ -1283,6 +1290,7 @@ fn parse_dhcp_log(html: &str) -> Vec<DhcpLogEntry> {
                 ia_id: field_number_colon(chunk, "IA ID"),
                 t1: field_number_colon(chunk, "t1"),
                 t2: field_number_colon(chunk, "t2"),
+                ia_count: field_number_colon(chunk, "IA_NA/IA_PD count"),
                 ia_addr_count: field_number_colon(chunk, "IA addr count"),
                 stateful_addr: ia_addr
                     .as_ref()
@@ -1446,6 +1454,7 @@ mod tests {
         assert!((channels[0].tx_power_dbmv - 37.0).abs() < 0.01);
         assert!((channels[0].first_active_subcarrier_mhz - 74.0).abs() < 0.01);
         assert!((channels[0].last_active_subcarrier_mhz - 773.0).abs() < 0.01);
+        assert_eq!(channels[0].unlabeled_values, vec![29.8, 64.8]);
     }
 
     #[test]
@@ -1509,6 +1518,7 @@ mod tests {
         assert_eq!(entry.index, 3);
         assert_eq!(entry.message_type, "renew");
         assert_eq!(entry.ia_id, Some(-763769691));
+        assert_eq!(entry.ia_count, Some(1));
         assert_eq!(entry.stateful_addr, "2a02:8101:1130:d::c2a");
         assert_eq!(entry.preferred_lifetime, Some(604800));
         assert_eq!(entry.valid_lifetime, Some(604800));
@@ -1627,6 +1637,9 @@ mod tests {
         assert!(data.parse_status.channels);
         assert!(data.parse_status.version);
         assert!(!data.parse_status.dhcp);
+        assert!(!data.parse_status.qos);
+        assert!(!data.parse_status.event_log);
+        assert!(!data.parse_status.product);
     }
 
     #[test]

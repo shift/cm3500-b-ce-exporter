@@ -157,11 +157,16 @@ async fn main() -> Result<()> {
         bail!("--disable-prometheus requires --otlp-endpoint");
     }
 
-    let cert_fingerprint = args
+    let fingerprint_input = args
         .tls_cert_fingerprint
         .as_deref()
+        .filter(|value| !value.trim().is_empty());
+    let cert_fingerprint = fingerprint_input
         .map(client::parse_fingerprint)
         .transpose()?;
+    if args.insecure_tls && cert_fingerprint.is_some() {
+        tracing::warn!("--insecure-tls is ignored because --tls-cert-fingerprint is set");
+    }
     let client_options = client::ClientOptions {
         connect_timeout: Duration::from_secs(args.connect_timeout),
         request_timeout: Duration::from_secs(args.request_timeout),
@@ -352,7 +357,7 @@ async fn do_scrape(
                     );
 
                     if let Some(otlp) = otlp {
-                        match otlp.push(&data).await {
+                        match otlp.push(&data, capacity_margin_percent).await {
                             Ok(()) => tracing::debug!("OTLP push OK"),
                             Err(e) => tracing::warn!("OTLP push failed: {}", e),
                         }
@@ -414,6 +419,13 @@ async fn do_scrape(
     }
 }
 
+fn readiness_age(health: &HealthState, stale_after: Duration) -> Option<Duration> {
+    health
+        .last_success
+        .map(|last| last.elapsed())
+        .filter(|age| *age <= stale_after)
+}
+
 async fn record_health(health: &RwLock<HealthState>, scrape: &ScrapeResult) {
     let mut guard = health.write().await;
     if scrape.success {
@@ -446,16 +458,12 @@ fn validate_args(args: &Args) -> Result<()> {
     if args.readiness_stale_after == Some(0) {
         bail!("--readiness-stale-after must be greater than zero");
     }
-    let tls_modes = [
-        args.insecure_tls,
-        args.ca_cert.is_some(),
-        args.tls_cert_fingerprint.is_some(),
-    ]
-    .into_iter()
-    .filter(|enabled| *enabled)
-    .count();
-    if tls_modes > 1 {
-        bail!("--insecure-tls, --ca-cert, and --tls-cert-fingerprint are mutually exclusive");
+    let fingerprint_set = args
+        .tls_cert_fingerprint
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    if args.ca_cert.is_some() && (args.insecure_tls || fingerprint_set) {
+        bail!("--ca-cert cannot be combined with --insecure-tls or --tls-cert-fingerprint");
     }
     Ok(())
 }
@@ -483,9 +491,7 @@ async fn ready_handler(
 ) -> impl axum::response::IntoResponse {
     let health = state.health.read().await;
     let stale_for = health.last_success.map(|last| last.elapsed());
-    let ready = stale_for
-        .map(|age| age <= state.ready_stale_after)
-        .unwrap_or(false);
+    let ready = readiness_age(&health, state.ready_stale_after).is_some();
     if ready {
         (
             axum::http::StatusCode::OK,
@@ -550,10 +556,95 @@ mod tests {
         assert!(validate_args(&args(&["--enable-spectrum", "--spectrum-interval", "0"])).is_err());
     }
 
+    #[tokio::test]
+    async fn spectrum_scan_failure_does_not_fail_a_healthy_scrape() {
+        async fn handler(
+            method: axum::http::Method,
+            uri: axum::http::Uri,
+        ) -> axum::response::Response {
+            use axum::response::IntoResponse;
+            match (method, uri.path()) {
+                (axum::http::Method::POST, "/cgi-bin/spectrum_cgi") => {
+                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "").into_response()
+                }
+                (axum::http::Method::GET, "/cgi-bin/status_cgi") => (
+                    axum::http::StatusCode::OK,
+                    r#"
+                    <table>
+                      <tr><td>CM Status:</td><td>OPERATIONAL</td></tr>
+                      <tr><td>Downstream 1</td><td>3</td><td>570.00 MHz</td><td>2.20 dBmV</td><td>40.37 dB</td><td>256QAM</td><td>2858</td><td>12</td><td>0</td></tr>
+                    </table>
+                    "#,
+                )
+                    .into_response(),
+                (axum::http::Method::GET, "/cgi-bin/vers_cgi") => {
+                    (axum::http::StatusCode::OK, "MODEL: CM3500B").into_response()
+                }
+                _ => (axum::http::StatusCode::OK, "").into_response(),
+            }
+        }
+
+        let app = axum::Router::new().fallback(handler);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let client = client::ModemClient::new(
+            &format!("http://{}", addr),
+            "admin",
+            "pw",
+            &client::ClientOptions {
+                connect_timeout: Duration::from_secs(1),
+                request_timeout: Duration::from_secs(2),
+                insecure_tls: false,
+                ca_cert: None,
+                cert_fingerprint: None,
+            },
+        )
+        .unwrap();
+        let mut cache = SpectrumCache::default();
+        let result = do_scrape(
+            &client,
+            None,
+            95,
+            true,
+            Duration::from_secs(0),
+            None,
+            &mut cache,
+        )
+        .await;
+
+        assert!(result.success);
+        assert!(result.metrics_text.contains("cm3500_up 1"));
+        assert!(result
+            .metrics_text
+            .contains("cm3500_downstream_qam_power_dbmv"));
+    }
+
     #[test]
-    fn tls_options_are_mutually_exclusive() {
+    fn readiness_requires_a_recent_success() {
+        let stale_after = Duration::from_secs(60);
+        let never = HealthState::default();
+        assert_eq!(readiness_age(&never, stale_after), None);
+
+        let recent = HealthState {
+            last_success: Some(Instant::now() - Duration::from_secs(5)),
+            last_error: None,
+        };
+        assert!(readiness_age(&recent, stale_after).is_some());
+
+        let stale = HealthState {
+            last_success: Some(Instant::now() - Duration::from_secs(120)),
+            last_error: Some("timeout".into()),
+        };
+        assert_eq!(readiness_age(&stale, stale_after), None);
+    }
+
+    #[test]
+    fn tls_options_are_compatible_with_compose_fallback() {
         assert!(validate_args(&args(&["--insecure-tls", "--ca-cert", "/tmp/ca.pem"])).is_err());
-        assert!(validate_args(&args(&["--insecure-tls", "--tls-cert-fingerprint", "aa"])).is_err());
         assert!(validate_args(&args(&[
             "--ca-cert",
             "/tmp/ca.pem",
@@ -561,6 +652,9 @@ mod tests {
             "aa"
         ]))
         .is_err());
+        // Compose always passes both; a non-empty fingerprint takes precedence.
+        assert!(validate_args(&args(&["--insecure-tls", "--tls-cert-fingerprint", "aa"])).is_ok());
+        assert!(validate_args(&args(&["--insecure-tls", "--tls-cert-fingerprint", ""])).is_ok());
         assert!(validate_args(&args(&["--tls-cert-fingerprint", "aa"])).is_ok());
     }
 }

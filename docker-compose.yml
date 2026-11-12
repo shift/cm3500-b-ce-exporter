@@ -8,9 +8,11 @@ services:
       - "0.0.0.0:10044"
       - "--modem-url"
       - "${MODEM_URL:-https://192.168.100.1}"
-      # For authenticated TLS, replace this with:
-      #   - "--tls-cert-fingerprint"
-      #   - "SHA256:..."
+      # Set MODEM_TLS_FINGERPRINT to pin the modem certificate. When empty,
+      # the exporter falls back to --insecure-tls for the built-in self-signed
+      # certificate.
+      - "--tls-cert-fingerprint"
+      - "${MODEM_TLS_FINGERPRINT:-}"
       - "--insecure-tls"
     expose:
       - "10044"

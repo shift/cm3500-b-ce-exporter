@@ -10,6 +10,24 @@ groups:
           summary: "CM3500 modem scrape failing"
           description: "Prometheus has been unable to scrape the CM3500 exporter for 2 minutes."
 
+      - alert: CM3500ParseFailure
+        expr: cm3500_parse_success == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CM3500 modem page parse failed"
+          description: "The exporter fetched the modem pages but required fields could not be parsed. Check cm3500_section_parse_success for the failing section."
+
+      - alert: CM3500SectionParseFailure
+        expr: cm3500_section_parse_success == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CM3500 section {{ $labels.section }} parse failed"
+          description: "The {{ $labels.section }} section of the modem interface could not be parsed. This may indicate a firmware change or a partial response."
+
       - alert: CM3500ScrapeSlow
         expr: cm3500_scrape_duration_seconds > 5
         for: 5m

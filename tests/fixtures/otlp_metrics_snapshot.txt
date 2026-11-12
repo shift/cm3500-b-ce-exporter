@@ -7,7 +7,10 @@ service.name=cm3500-exporter
 [metric_names]
 cm3500.exporter.parse.success
 cm3500.exporter.scrape.duration
+cm3500.exporter.section_parse.success
 cm3500.exporter.status
+hw.cable_modem.capacity.estimated
+hw.cable_modem.capacity.provisioned
 hw.cable_modem.cmts.t3_timeouts.count
 hw.cable_modem.cmts.t4_timeouts.count
 hw.cable_modem.config.file.info
@@ -68,6 +71,7 @@ hw.cable_modem.upstream.ofdma.channel.width
 hw.cable_modem.upstream.ofdma.profile.active
 hw.cable_modem.upstream.ofdma.subcarrier.range
 hw.cable_modem.upstream.ofdma.subcarriers.active
+hw.cable_modem.upstream.ofdma.unlabeled_value
 hw.cable_modem.upstream.power
 hw.cable_modem.upstream.profile.active
 hw.cable_modem.upstream.profile_changes.count
