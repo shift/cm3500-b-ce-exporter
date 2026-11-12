@@ -22,3 +22,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Runtime automation outputs
+state.json
+capacity.json

@@ -1,6 +1,15 @@
 groups:
   - name: cm3500.rules
     rules:
+      - alert: CM3500ExporterDown
+        expr: absent(cm3500_up)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 exporter is not reporting"
+          description: "Prometheus has no cm3500_up series. The exporter process may be down, unreachable, or stuck before binding its HTTP listener."
+
       - alert: CM3500ModemDown
         expr: cm3500_up == 0
         for: 2m
@@ -146,6 +155,8 @@ groups:
         annotations:
           summary: "High upstream power tilt ({{ $value | printf \"%.1f\" }} dBmV across channels)"
           description: "The delta between highest and lowest upstream SC-QAM transmit power exceeds 6 dBmV. This indicates frequency-dependent attenuation on the coax drop or return path."
+
+      - alert: CM3500DHCPLeaseExpiring
         expr: cm3500_dhcp_lease_remaining_seconds < 60
         for: 2m
         labels:

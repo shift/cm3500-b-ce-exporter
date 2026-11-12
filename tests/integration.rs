@@ -106,6 +106,21 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("direction=\"Upstream\""));
     assert!(output.contains("direction=\"Downstream\""));
 
+    // Metric families must be emitted exactly once; duplicate HELP/TYPE makes
+    // the entire Prometheus scrape invalid.
+    let mut help = std::collections::HashSet::new();
+    let mut types = std::collections::HashSet::new();
+    for line in output.lines() {
+        if let Some(rest) = line.strip_prefix("# HELP ") {
+            let name = rest.split_whitespace().next().unwrap();
+            assert!(help.insert(name), "duplicate HELP for {name}");
+        }
+        if let Some(rest) = line.strip_prefix("# TYPE ") {
+            let name = rest.split_whitespace().next().unwrap();
+            assert!(types.insert(name), "duplicate TYPE for {name}");
+        }
+    }
+
     // Verify TYPE headers present
     assert!(output.contains("# TYPE cm3500_up gauge"));
     assert!(output.contains("# TYPE cm3500_downstream_qam_octets_total counter"));
@@ -122,7 +137,7 @@ fn test_error_metrics() {
     assert!(output.contains("cm3500_up 0"));
     assert!(output.contains("cm3500_parse_success 0"));
     assert!(output.contains("cm3500_scrape_duration_seconds 2.5"));
-    assert!(output.contains("cm3500_scrape_error{error=\"connection refused\"}"));
+    assert!(output.contains("cm3500_scrape_error 1"));
 }
 
 #[test]

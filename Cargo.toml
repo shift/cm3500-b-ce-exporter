@@ -1,13 +1,13 @@
 [package]
 name = "cm3500-b-ce-exporter"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Prometheus exporter for ARRIS CM3500B CE cable modem"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", default-features = false, features = ["cookies", "rustls-tls", "json"] }
 regex = "1"
 ring = "0.17"

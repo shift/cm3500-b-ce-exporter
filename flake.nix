@@ -13,12 +13,9 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          pkgsStatic = pkgs.pkgsStatic;
           toolchain = fenix.packages.${system}.complete.toolchain;
-        in {
-          default = (pkgs.makeRustPlatform {
-            rustc = toolchain;
-            cargo = toolchain;
-          }).buildRustPackage {
+          common = {
             pname = "cm3500-b-ce-exporter";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
 
@@ -26,17 +23,21 @@
 
             cargoLock.lockFile = ./Cargo.lock;
 
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = [ pkgs.openssl ];
-
             meta = with pkgs.lib; {
               description = "Prometheus exporter for ARRIS CM3500B CE cable modem (DOCSIS 3.1 / EuroDOCSIS 3.0)";
               homepage = "https://github.com/shift/cm3500-b-ce-exporter";
-              license = licenses.agpl3Only;
+              license = licenses.agpl3Plus;
               maintainers = [ maintainers.shift ];
               mainProgram = "cm3500-b-ce-exporter";
             };
           };
+        in {
+          default = (pkgs.makeRustPlatform {
+            rustc = toolchain;
+            cargo = toolchain;
+          }).buildRustPackage common;
+
+          static = pkgsStatic.rustPlatform.buildRustPackage common;
         }
       );
 

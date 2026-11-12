@@ -22,8 +22,8 @@ struct Args {
     #[arg(long, default_value = "admin")]
     username: String,
 
-    /// Modem login password
-    #[arg(long, default_value_t = String::new())]
+    /// Modem login password (or set MODEM_PASSWORD)
+    #[arg(long, env = "MODEM_PASSWORD", default_value_t = String::new())]
     password: String,
 
     /// Listen address for the Prometheus metrics server
@@ -104,6 +104,10 @@ struct Args {
     /// OTLP HTTP header in KEY=VALUE format (can be repeated)
     #[arg(long = "otlp-header", value_name = "KEY=VALUE")]
     otlp_headers: Vec<String>,
+
+    /// Internal container healthcheck: fetch a URL and exit 0 on 2xx
+    #[arg(long, hide = true, value_name = "URL")]
+    check_ready: Option<String>,
 }
 
 struct ScrapeResult {
@@ -151,6 +155,19 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+    if let Some(url) = args.check_ready.as_deref() {
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(2))
+            .build()?;
+        let healthy = client
+            .get(url)
+            .send()
+            .await
+            .map(|response| response.status().is_success())
+            .unwrap_or(false);
+        std::process::exit(if healthy { 0 } else { 1 });
+    }
     validate_args(&args)?;
 
     if args.disable_prometheus && args.otlp_endpoint.is_none() {
@@ -181,6 +198,56 @@ async fn main() -> Result<()> {
         &client_options,
     )?;
 
+    let otlp_headers: Vec<(String, String)> = args
+        .otlp_headers
+        .iter()
+        .filter_map(|h| {
+            let (k, v) = h.split_once('=')?;
+            Some((k.to_string(), v.to_string()))
+        })
+        .collect();
+
+    let otlp_client: Arc<RwLock<Option<Arc<otlp::OtlpClient>>>> =
+        if let Some(endpoint) = &args.otlp_endpoint {
+            tracing::info!("OTLP push enabled, endpoint: {}", endpoint);
+            Arc::new(RwLock::new(Some(Arc::new(otlp::OtlpClient::new_fallback(
+                endpoint,
+                otlp_headers,
+                &args.modem_url,
+            )))))
+        } else {
+            Arc::new(RwLock::new(None))
+        };
+
+    let ready_stale_after = Duration::from_secs(
+        args.readiness_stale_after
+            .unwrap_or_else(|| args.interval.saturating_mul(3).max(60)),
+    );
+    let state = AppState {
+        metrics_text: Arc::new(RwLock::new(String::new())),
+        health: Arc::new(RwLock::new(HealthState::default())),
+        ready_stale_after,
+    };
+
+    // Bind and serve before the first modem scrape so /health and /ready are
+    // available even while the modem is unreachable or rebooting.
+    let server_handle = if args.disable_prometheus {
+        tracing::info!("Prometheus HTTP endpoint disabled");
+        None
+    } else {
+        let app = axum::Router::new()
+            .route("/metrics", axum::routing::get(metrics_handler))
+            .route("/health", axum::routing::get(health_handler))
+            .route("/ready", axum::routing::get(ready_handler))
+            .route("/", axum::routing::get(landing_handler))
+            .with_state(state.clone());
+        let listener = tokio::net::TcpListener::bind(&args.listen).await?;
+        tracing::info!("Listening on {}", args.listen);
+        Some(tokio::spawn(
+            async move { axum::serve(listener, app).await },
+        ))
+    };
+
     tracing::info!("Logging into modem at {}", args.modem_url);
     if let Err(e) = client.login().await {
         // Keep the exporter alive so /health, /ready, and /metrics can report
@@ -197,9 +264,10 @@ async fn main() -> Result<()> {
 
     let mut spectrum_cache = SpectrumCache::default();
     let spectrum_interval = Duration::from_secs(args.spectrum_interval);
+    let otlp_for_initial = otlp_client.read().await.clone();
     let initial_scrape = do_scrape(
         &client,
-        None,
+        otlp_for_initial.as_deref(),
         args.capacity_margin_percent,
         args.enable_spectrum,
         spectrum_interval,
@@ -212,38 +280,8 @@ async fn main() -> Result<()> {
             tracing::warn!("Failed to write automation output files: {}", e);
         }
     }
-    let ready_stale_after = Duration::from_secs(
-        args.readiness_stale_after
-            .unwrap_or_else(|| args.interval.saturating_mul(3).max(60)),
-    );
-    let health = Arc::new(RwLock::new(HealthState::default()));
-    record_health(&health, &initial_scrape).await;
-    let state = AppState {
-        metrics_text: Arc::new(RwLock::new(initial_scrape.metrics_text)),
-        health,
-        ready_stale_after,
-    };
-
-    let otlp_headers: Vec<(String, String)> = args
-        .otlp_headers
-        .iter()
-        .filter_map(|h| {
-            let (k, v) = h.split_once('=')?;
-            Some((k.to_string(), v.to_string()))
-        })
-        .collect();
-
-    let otlp_client: Arc<RwLock<Option<otlp::OtlpClient>>> =
-        if let Some(endpoint) = &args.otlp_endpoint {
-            tracing::info!("OTLP push enabled, endpoint: {}", endpoint);
-            Arc::new(RwLock::new(Some(otlp::OtlpClient::new_fallback(
-                endpoint,
-                otlp_headers,
-                &args.modem_url,
-            ))))
-        } else {
-            Arc::new(RwLock::new(None))
-        };
+    record_health(&state.health, &initial_scrape).await;
+    *state.metrics_text.write().await = initial_scrape.metrics_text;
 
     let scrape_handle = {
         let state = state.clone();
@@ -258,15 +296,15 @@ async fn main() -> Result<()> {
             let period = Duration::from_secs(interval_secs);
             let mut interval =
                 tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             let mut automation_outputs = automation_outputs;
             let mut spectrum_cache = spectrum_cache;
             loop {
                 interval.tick().await;
-                let otlp = otlp_client.read().await;
-                let otlp_ref = otlp.as_ref();
+                let otlp = otlp_client.read().await.clone();
                 let scrape = do_scrape(
                     &client,
-                    otlp_ref,
+                    otlp.as_deref(),
                     capacity_margin_percent,
                     enable_spectrum,
                     spectrum_interval,
@@ -286,26 +324,13 @@ async fn main() -> Result<()> {
         })
     };
 
-    if args.disable_prometheus {
-        tracing::info!("Prometheus HTTP endpoint disabled");
-        scrape_handle.await?;
-    } else {
-        let app = axum::Router::new()
-            .route("/metrics", axum::routing::get(metrics_handler))
-            .route("/health", axum::routing::get(health_handler))
-            .route("/ready", axum::routing::get(ready_handler))
-            .route("/", axum::routing::get(landing_handler))
-            .with_state(state);
-
-        let listener = tokio::net::TcpListener::bind(&args.listen).await?;
-        tracing::info!("Listening on {}", args.listen);
-
-        let server_handle = axum::serve(listener, app);
-
+    if let Some(server_handle) = server_handle {
         tokio::select! {
-            r = server_handle => r?,
+            r = server_handle => r??,
             r = scrape_handle => r?,
         }
+    } else {
+        scrape_handle.await?;
     }
 
     Ok(())
@@ -331,6 +356,7 @@ async fn do_scrape(
                     }
                     Err(e) => {
                         tracing::warn!("Spectrum scan failed: {}", e);
+                        spectrum_cache.last_scan_at = Some(Instant::now());
                     }
                 }
             }
@@ -350,7 +376,10 @@ async fn do_scrape(
                 spectrum_cache.html.as_deref(),
                 duration,
             ) {
-                Ok(data) => {
+                Ok(mut data) => {
+                    data.spectrum_age_seconds = spectrum_cache
+                        .last_scan_at
+                        .map(|last| last.elapsed().as_secs_f64());
                     tracing::info!(
                         "Scrape OK: {} DS QAM, {} DS OFDM, {} US QAM, {} US OFDM channels ({:.1}s)",
                         data.downstream_qam.len(),
@@ -392,6 +421,11 @@ async fn do_scrape(
                             }
                         }
                     }
+                    if let Some(otlp) = otlp {
+                        if let Err(push_err) = otlp.push_failure(&message, duration).await {
+                            tracing::warn!("OTLP failure push failed: {}", push_err);
+                        }
+                    }
                     ScrapeResult {
                         metrics_text: metrics::render_parse_error_metrics(
                             &message, duration, &e.status,
@@ -410,6 +444,11 @@ async fn do_scrape(
             let duration = start.elapsed().as_secs_f64();
             let message = e.to_string();
             tracing::error!("Fetch error: {}", message);
+            if let Some(otlp) = otlp {
+                if let Err(push_err) = otlp.push_failure(&message, duration).await {
+                    tracing::warn!("OTLP failure push failed: {}", push_err);
+                }
+            }
             ScrapeResult {
                 metrics_text: metrics::render_error_metrics(&message, duration),
                 observation: automation::ScrapeObservation::from_error(
@@ -441,6 +480,14 @@ async fn record_health(health: &RwLock<HealthState>, scrape: &ScrapeResult) {
 }
 
 fn validate_args(args: &Args) -> Result<()> {
+    if args.password.is_empty() {
+        bail!("--password or MODEM_PASSWORD must be set");
+    }
+    for header in &args.otlp_headers {
+        if !header.contains('=') {
+            bail!("invalid --otlp-header (expected KEY=VALUE): {header}");
+        }
+    }
     if args.interval == 0 {
         bail!("--interval must be greater than zero");
     }
@@ -543,6 +590,15 @@ mod tests {
         let mut argv = vec!["cm3500-exporter", "--password", "test"];
         argv.extend_from_slice(extra);
         Args::try_parse_from(argv).expect("arguments should parse")
+    }
+
+    #[test]
+    fn rejects_empty_password_and_malformed_otlp_headers() {
+        let mut empty_password = args(&[]);
+        empty_password.password = String::new();
+        assert!(validate_args(&empty_password).is_err());
+        assert!(validate_args(&args(&["--otlp-header", "not-a-pair"])).is_err());
+        assert!(validate_args(&args(&["--otlp-header", "Authorization=Basic x"])).is_ok());
     }
 
     #[test]

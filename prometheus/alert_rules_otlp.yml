@@ -14,6 +14,15 @@
 groups:
   - name: cm3500.otlp.rules
     rules:
+      - alert: CM3500OtlpExporterDown
+        expr: absent(cm3500_exporter_status)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CM3500 exporter is not reporting (OTLP)"
+          description: "No cm3500_exporter_status series has arrived. The exporter may be down or OTLP delivery may be broken."
+
       - alert: CM3500OtlpModemDown
         expr: cm3500_exporter_status == 0
         for: 2m

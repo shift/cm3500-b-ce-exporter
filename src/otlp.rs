@@ -7,7 +7,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct OtlpClient {
     client: Client,
@@ -17,6 +17,7 @@ pub struct OtlpClient {
     resource_attrs: Mutex<Vec<Value>>,
     needs_resource_enrichment: AtomicBool,
     sent_event_keys: Mutex<VecDeque<String>>,
+    counter_state: Mutex<Option<(u64, String)>>,
 }
 
 impl OtlpClient {
@@ -44,14 +45,35 @@ impl OtlpClient {
         resource_attrs: Vec<Value>,
         needs_resource_enrichment: bool,
     ) -> Self {
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
-            client: Client::new(),
+            client,
             metrics_endpoint: normalize_otlp_endpoint(endpoint, SignalKind::Metrics),
             logs_endpoint: normalize_otlp_endpoint(endpoint, SignalKind::Logs),
             headers,
             resource_attrs: Mutex::new(resource_attrs),
             needs_resource_enrichment: AtomicBool::new(needs_resource_enrichment),
             sent_event_keys: Mutex::new(VecDeque::with_capacity(256)),
+            counter_state: Mutex::new(None),
+        }
+    }
+
+    fn counter_start(&self, uptime_seconds: Option<u64>, now: &str) -> String {
+        let Some(uptime) = uptime_seconds else {
+            return now.to_string();
+        };
+        let mut state = self.counter_state.lock().unwrap();
+        match state.as_ref() {
+            Some((previous_uptime, start)) if uptime >= *previous_uptime => start.clone(),
+            _ => {
+                let start = boot_time_nanos(Some(uptime), now).unwrap_or_else(|| now.to_string());
+                *state = Some((uptime, start.clone()));
+                start
+            }
         }
     }
 
@@ -77,6 +99,37 @@ impl OtlpClient {
         Ok(())
     }
 
+    pub async fn push_failure(&self, error: &str, scrape_duration_secs: f64) -> Result<()> {
+        let now = now_nanos();
+        let body = json!({
+            "resourceMetrics": [{
+                "resource": { "attributes": self.resource_attrs() },
+                "scopeMetrics": [{
+                    "scope": {
+                        "name": "cm3500-exporter",
+                        "version": env!("CARGO_PKG_VERSION")
+                    },
+                    "metrics": [
+                        self.failure_metric("cm3500.exporter.status", "Whether the modem scrape was successful", 0.0, &now),
+                        self.failure_metric("cm3500.exporter.parse.success", "Whether the required modem page fields parsed successfully", 0.0, &now),
+                        self.failure_metric("cm3500.exporter.scrape.duration", "Duration of the last modem scrape", scrape_duration_secs, &now),
+                    ]
+                }]
+            }]
+        });
+        tracing::warn!("OTLP failure status push: {}", error);
+        self.post_json(&self.metrics_endpoint, &body).await
+    }
+
+    fn failure_metric(&self, name: &str, description: &str, value: f64, now: &str) -> Value {
+        gauge(
+            name,
+            description,
+            if name.ends_with("duration") { "s" } else { "1" },
+            vec![f64_dp(value, vec![], now)],
+        )
+    }
+
     async fn push_metrics(&self, data: &ScrapedData, capacity_margin_percent: u8) -> Result<()> {
         let body = self.build_metrics_body(data, &now_nanos(), capacity_margin_percent);
         self.post_json(&self.metrics_endpoint, &body).await
@@ -88,8 +141,8 @@ impl OtlpClient {
         now: &str,
         capacity_margin_percent: u8,
     ) -> Value {
-        let boot_nanos = boot_time_nanos(data.uptime_seconds, now);
-        let counter_start = boot_nanos.as_deref().unwrap_or(now);
+        let counter_start = self.counter_start(data.uptime_seconds, now);
+        let counter_start = counter_start.as_str();
         let mut metrics: Vec<Value> = Vec::new();
 
         metrics.push(gauge(
@@ -163,13 +216,11 @@ impl OtlpClient {
         }
 
         if let Some(uptime) = data.uptime_seconds {
-            metrics.push(sum(
+            metrics.push(gauge(
                 "system.uptime",
                 "System uptime",
                 "s",
                 vec![f64_dp(uptime as f64, vec![], now)],
-                counter_start,
-                true,
             ));
         }
 
@@ -491,13 +542,7 @@ impl OtlpClient {
             us_power.push(f64_dp(ch.power_dbmv, attrs.clone(), now));
             us_sym_rate.push(f64_dp(ch.symbol_rate_ksym * 1000.0, attrs, now));
         }
-        if !us_power.is_empty() {
-            metrics.push(gauge(
-                "hw.cable_modem.upstream.power",
-                "Upstream SC-QAM transmit power",
-                "dBmV",
-                us_power,
-            ));
+        if !us_sym_rate.is_empty() {
             metrics.push(gauge(
                 "hw.cable_modem.upstream.symbol_rate",
                 "Upstream SC-QAM symbol rate",
@@ -506,7 +551,6 @@ impl OtlpClient {
             ));
         }
 
-        let mut us_ofdma_power = Vec::new();
         let mut us_ofdma_width = Vec::new();
         let mut us_ofdma_subcarriers = Vec::new();
         let mut us_ofdma_subcarrier_range = Vec::new();
@@ -517,7 +561,7 @@ impl OtlpClient {
                 str_attr("cable.channel.kind", "ofdma"),
                 str_attr("cable.ofdma.fft_type", &ch.fft_type),
             ];
-            us_ofdma_power.push(f64_dp(ch.tx_power_dbmv, attrs.clone(), now));
+            us_power.push(f64_dp(ch.tx_power_dbmv, attrs.clone(), now));
             us_ofdma_width.push(f64_dp(
                 ch.channel_width_mhz * 1_000_000.0,
                 attrs.clone(),
@@ -541,13 +585,7 @@ impl OtlpClient {
                 us_ofdma_unlabeled.push(f64_dp(*value, value_attrs, now));
             }
         }
-        if !us_ofdma_power.is_empty() {
-            metrics.push(gauge(
-                "hw.cable_modem.upstream.power",
-                "Upstream transmit power",
-                "dBmV",
-                us_ofdma_power,
-            ));
+        if !us_ofdma_width.is_empty() {
             metrics.push(gauge(
                 "hw.cable_modem.upstream.ofdma.channel.width",
                 "Upstream OFDMA channel width",
@@ -574,6 +612,14 @@ impl OtlpClient {
                     us_ofdma_unlabeled,
                 ));
             }
+        }
+        if !us_power.is_empty() {
+            metrics.push(gauge(
+                "hw.cable_modem.upstream.power",
+                "Upstream transmit power (SC-QAM and OFDMA)",
+                "dBmV",
+                us_power,
+            ));
         }
 
         if !data.qos_flows.is_empty() {
@@ -882,6 +928,14 @@ impl OtlpClient {
                 dps,
             ));
         }
+        if let Some(age) = data.spectrum_age_seconds {
+            metrics.push(gauge(
+                "hw.cable_modem.spectrum.scan_age",
+                "Age of the cached spectrum scan",
+                "s",
+                vec![f64_dp(age, vec![], now)],
+            ));
+        }
         if !data.spectrum.is_empty() {
             metrics.push(gauge(
                 "hw.cable_modem.spectrum.chunks",
@@ -969,7 +1023,6 @@ impl OtlpClient {
             vec![f64_dp(
                 1.0,
                 vec![
-                    str_attr("cm3500.status.time", &data.status_info.time_and_date),
                     str_attr("cm3500.product.type", &data.status_info.product_type),
                     str_attr("cm3500.hardware.info", &data.status_info.hardware_info),
                     str_attr("cm3500.version.system", &data.version_info.system),
@@ -1397,44 +1450,66 @@ impl OtlpClient {
 
     async fn push_logs(&self, data: &ScrapedData) -> Result<()> {
         let now = now_nanos();
-        let Some(body) = self.build_logs_body(data, &now) else {
+        let Some((body, keys)) = self.build_logs_body_with_keys(data, &now) else {
             return Ok(());
         };
-        self.post_json(&self.logs_endpoint, &body).await
+        self.post_json(&self.logs_endpoint, &body).await?;
+        self.mark_log_keys_sent(keys);
+        Ok(())
     }
 
+    #[cfg(test)]
     fn build_logs_body(&self, data: &ScrapedData, now: &str) -> Option<Value> {
-        let mut records = self.new_log_records(&data.events, now);
-        records.extend(self.new_dhcp_log_records(&data.dhcp_log, now));
-        records.extend(self.new_dsx_log_records(&data.dsx_log, now));
+        let (body, keys) = self.build_logs_body_with_keys(data, now)?;
+        self.mark_log_keys_sent(keys);
+        Some(body)
+    }
+
+    fn build_logs_body_with_keys(
+        &self,
+        data: &ScrapedData,
+        now: &str,
+    ) -> Option<(Value, Vec<String>)> {
+        let (mut records, mut keys) = self.new_log_records(&data.events, now);
+        let (dhcp_records, dhcp_keys) = self.new_dhcp_log_records(&data.dhcp_log, now);
+        records.extend(dhcp_records);
+        keys.extend(dhcp_keys);
+        let (dsx_records, dsx_keys) = self.new_dsx_log_records(&data.dsx_log, now);
+        records.extend(dsx_records);
+        keys.extend(dsx_keys);
         if records.is_empty() {
             return None;
         }
 
-        Some(json!({
-            "resourceLogs": [{
-                "resource": { "attributes": self.resource_attrs() },
-                "scopeLogs": [{
-                    "scope": {
-                        "name": "cm3500-exporter",
-                        "version": env!("CARGO_PKG_VERSION")
-                    },
-                    "logRecords": records
+        Some((
+            json!({
+                "resourceLogs": [{
+                    "resource": { "attributes": self.resource_attrs() },
+                    "scopeLogs": [{
+                        "scope": {
+                            "name": "cm3500-exporter",
+                            "version": env!("CARGO_PKG_VERSION")
+                        },
+                        "logRecords": records
+                    }]
                 }]
-            }]
-        }))
+            }),
+            keys,
+        ))
     }
 
-    fn new_log_records(&self, events: &[EventLogEntry], now: &str) -> Vec<Value> {
-        let mut sent = self.sent_event_keys.lock().unwrap();
+    fn new_log_records(&self, events: &[EventLogEntry], now: &str) -> (Vec<Value>, Vec<String>) {
+        let sent = self.sent_event_keys.lock().unwrap();
+        let mut seen: std::collections::HashSet<String> = sent.iter().cloned().collect();
         let mut records = Vec::new();
+        let mut keys = Vec::new();
 
         for event in events {
             let key = format!(
                 "{}|{}|{}|{}",
                 event.timestamp, event.event_id, event.event_level, event.description
             );
-            if sent.iter().any(|existing| existing == &key) {
+            if !seen.insert(key.clone()) {
                 continue;
             }
 
@@ -1464,25 +1539,28 @@ impl OtlpClient {
                 "attributes": attrs,
             }));
 
-            sent.push_back(key);
-            while sent.len() > 256 {
-                sent.pop_front();
-            }
+            keys.push(key);
         }
 
-        records
+        (records, keys)
     }
 
-    fn new_dhcp_log_records(&self, entries: &[DhcpLogEntry], now: &str) -> Vec<Value> {
-        let mut sent = self.sent_event_keys.lock().unwrap();
+    fn new_dhcp_log_records(
+        &self,
+        entries: &[DhcpLogEntry],
+        now: &str,
+    ) -> (Vec<Value>, Vec<String>) {
+        let sent = self.sent_event_keys.lock().unwrap();
+        let mut seen: std::collections::HashSet<String> = sent.iter().cloned().collect();
         let mut records = Vec::new();
+        let mut keys = Vec::new();
 
         for entry in entries {
             let key = format!(
                 "dhcp|{}|{}|{}|{}",
                 entry.index, entry.timestamp, entry.message_type, entry.stateful_addr
             );
-            if sent.iter().any(|existing| existing == &key) {
+            if !seen.insert(key.clone()) {
                 continue;
             }
 
@@ -1553,23 +1631,22 @@ impl OtlpClient {
                 "attributes": attrs,
             }));
 
-            sent.push_back(key);
-            while sent.len() > 256 {
-                sent.pop_front();
-            }
+            keys.push(key);
         }
 
-        records
+        (records, keys)
     }
 
-    fn new_dsx_log_records(&self, entries: &[DsxLogEntry], now: &str) -> Vec<Value> {
-        let mut sent = self.sent_event_keys.lock().unwrap();
+    fn new_dsx_log_records(&self, entries: &[DsxLogEntry], now: &str) -> (Vec<Value>, Vec<String>) {
+        let sent = self.sent_event_keys.lock().unwrap();
+        let mut seen: std::collections::HashSet<String> = sent.iter().cloned().collect();
         let mut records = Vec::new();
+        let mut keys = Vec::new();
 
         for (index, entry) in entries.iter().enumerate() {
             let message = entry.cells.join(" | ");
             let key = format!("dsx|{}|{}", index, message);
-            if sent.iter().any(|existing| existing == &key) {
+            if !seen.insert(key.clone()) {
                 continue;
             }
 
@@ -1586,13 +1663,23 @@ impl OtlpClient {
                 ],
             }));
 
-            sent.push_back(key);
-            while sent.len() > 256 {
-                sent.pop_front();
-            }
+            keys.push(key);
         }
 
-        records
+        (records, keys)
+    }
+
+    fn mark_log_keys_sent(&self, keys: Vec<String>) {
+        if keys.is_empty() {
+            return;
+        }
+        let mut sent = self.sent_event_keys.lock().unwrap();
+        for key in keys {
+            sent.push_back(key);
+        }
+        while sent.len() > 256 {
+            sent.pop_front();
+        }
     }
 
     async fn post_json(&self, endpoint: &str, body: &Value) -> Result<()> {
@@ -1744,7 +1831,7 @@ fn f64_dp(value: f64, attributes: Vec<Value>, time_nanos: &str) -> Value {
 fn i64_dp(value: i64, attributes: Vec<Value>, time_nanos: &str) -> Value {
     json!({
         "timeUnixNano": time_nanos,
-        "as_int": value.to_string(),
+        "asInt": value.to_string(),
         "attributes": attributes
     })
 }
@@ -2050,6 +2137,36 @@ mod tests {
         assert_eq!(
             dsx["body"]["stringValue"].as_str(),
             Some("DSX message | detail")
+        );
+    }
+
+    #[test]
+    fn otlp_metric_names_are_unique_and_use_camel_case_int_fields() {
+        let data = sample_data();
+        let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
+        let body = client.build_metrics_body(&data, "1000000000", 95);
+        let metrics = body["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]
+            .as_array()
+            .unwrap();
+
+        let mut names = std::collections::HashSet::new();
+        for metric in metrics {
+            let name = metric["name"].as_str().unwrap();
+            assert!(names.insert(name.to_string()), "duplicate metric {name}");
+        }
+
+        fn has_as_int(value: &serde_json::Value) -> bool {
+            match value {
+                serde_json::Value::Object(map) => {
+                    map.contains_key("as_int") || map.values().any(has_as_int)
+                }
+                serde_json::Value::Array(values) => values.iter().any(has_as_int),
+                _ => false,
+            }
+        }
+        assert!(
+            !has_as_int(&body),
+            "OTLP JSON must use camelCase asInt, not as_int"
         );
     }
 
@@ -2448,6 +2565,7 @@ mod tests {
             diplexer_bands: vec![],
             dhcp_log: vec![],
             dsx_log: vec![],
+            spectrum_age_seconds: None,
             scrape_duration_secs: 1.23,
             parse_status: Default::default(),
         }

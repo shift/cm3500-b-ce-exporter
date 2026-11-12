@@ -131,10 +131,13 @@ jobs:
           done
 
           cp grafana/dashboard.json release/grafana-dashboard.json
+          cp grafana/dashboard_otlp.json release/grafana-dashboard-otlp.json
           cp prometheus/alert_rules_common.yml release/prometheus-alert-rules-common.yml
           cp prometheus/alert_rules_eurodocsis.yml release/prometheus-alert-rules-eurodocsis.yml
           cp prometheus/alert_rules_docsis_us.yml release/prometheus-alert-rules-docsis-us.yml
-          tar czf release/grafana-dashboards-and-alerts.tar.gz -C grafana dashboard.json -C ../prometheus alert_rules_common.yml alert_rules_eurodocsis.yml alert_rules_docsis_us.yml
+          cp prometheus/alert_rules_otlp.yml release/prometheus-alert-rules-otlp.yml
+          cp prometheus/alertmanager.yml release/alertmanager.yml
+          tar czf release/grafana-dashboards-and-alerts.tar.gz -C grafana dashboard.json dashboard_otlp.json -C ../prometheus alert_rules_common.yml alert_rules_eurodocsis.yml alert_rules_docsis_us.yml alert_rules_otlp.yml alertmanager.yml
 
       - name: Generate checksums
         run: |

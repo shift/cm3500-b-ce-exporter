@@ -1,2 +1,9 @@
 target/
-flake.lock
+.git/
+.env
+.env.*
+!.env.example
+result
+result-*
+state.json
+capacity.json

@@ -85,6 +85,15 @@ pub fn render_metrics(data: &ScrapedData, capacity_margin_percent: u8) -> String
     render_product_info(&mut out, &data.product_info);
     render_diplexer(&mut out, &data.diplexer_bands);
     render_spectrum(&mut out, &data.spectrum);
+    if let Some(age) = data.spectrum_age_seconds {
+        metric(
+            &mut out,
+            "cm3500_spectrum_scan_age_seconds",
+            "Age of the cached spectrum scan in seconds",
+            "gauge",
+            &age.to_string(),
+        );
+    }
     render_cpe(&mut out, data.cpe_static, data.cpe_dynamic);
     render_service_flow_configs(&mut out, &data.service_flow_configs);
     render_packet_classifications(&mut out, &data.packet_classifications);
@@ -97,7 +106,30 @@ pub fn render_metrics(data: &ScrapedData, capacity_margin_percent: u8) -> String
     render_dhcp_log(&mut out, &data.dhcp_log);
     render_dsx_log(&mut out, &data.dsx_log);
 
-    out
+    dedupe_metric_headers(out)
+}
+
+fn dedupe_metric_headers(out: String) -> String {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    let mut result = String::with_capacity(out.len());
+    for line in out.lines() {
+        let key = line
+            .strip_prefix("# HELP ")
+            .map(|rest| ("help", rest.split_whitespace().next().unwrap_or("")))
+            .or_else(|| {
+                line.strip_prefix("# TYPE ")
+                    .map(|rest| ("type", rest.split_whitespace().next().unwrap_or("")))
+            });
+        if let Some(key) = key {
+            if !seen.insert((key.0, key.1.to_string())) {
+                continue;
+            }
+        }
+        result.push_str(line);
+        result.push('\n');
+    }
+    result
 }
 
 fn render_capacity(
@@ -105,42 +137,50 @@ fn render_capacity(
     flows: &[crate::parser::ServiceFlowConfig],
     margin_percent: u8,
 ) {
+    header(
+        out,
+        "cm3500_capacity_provisioned_bps",
+        "Highest individual provisioned service-flow rate per direction (not aggregate or measured throughput)",
+        "gauge",
+    );
+    header(
+        out,
+        "cm3500_capacity_estimated_bps",
+        "Estimated usable capacity after applying the configured margin (not measured throughput)",
+        "gauge",
+    );
     for (direction, label) in [("Upstream", "upstream"), ("Downstream", "downstream")] {
         let max_bps = flows
             .iter()
             .filter(|f| f.direction.eq_ignore_ascii_case(direction))
             .map(|f| f.max_traffic_rate_bps)
             .max();
-        let Some(max_bps) = max_bps else {
+        let Some(provisioned_bps) = max_bps else {
             continue;
         };
-        let provisioned_bps = max_bps;
         let estimated_bps = provisioned_bps.saturating_mul(margin_percent as u64) / 100;
         let margin_label = margin_percent.to_string();
-        labeled_metric(
+        gauge(
             out,
             "cm3500_capacity_provisioned_bps",
-            "Highest individual provisioned service-flow rate per direction (not aggregate or measured throughput)",
-            "gauge",
             &[
                 ("direction", label),
                 ("basis", "max_individual_service_flow_rate"),
             ],
-            &provisioned_bps.to_string(),
+            provisioned_bps as f64,
         );
-        labeled_metric(
+        gauge(
             out,
             "cm3500_capacity_estimated_bps",
-            "Estimated usable capacity after applying the configured margin (not measured throughput)",
-            "gauge",
             &[
                 ("direction", label),
                 ("basis", "max_individual_service_flow_rate"),
                 ("margin_percent", margin_label.as_str()),
             ],
-            &estimated_bps.to_string(),
+            estimated_bps as f64,
         );
     }
+    out.push('\n');
 }
 
 fn render_status_info(
@@ -154,7 +194,6 @@ fn render_status_info(
         "Static modem status and product information",
         "gauge",
         &[
-            ("time_and_date", &info.time_and_date),
             ("product_type", &info.product_type),
             ("hardware_info", &info.hardware_info),
             ("system", &version.system),
@@ -166,15 +205,22 @@ fn render_status_info(
         "1",
     );
 
-    for (index, id) in info.l2vpn_attachment_circuit_ids.iter().enumerate() {
-        labeled_metric(
+    if !info.l2vpn_attachment_circuit_ids.is_empty() {
+        header(
             out,
             "cm3500_l2vpn_attachment_circuit_info",
             "L2VPN attachment circuit identifier",
             "gauge",
-            &[("index", &(index + 1).to_string()), ("id", id)],
-            "1",
         );
+        for (index, id) in info.l2vpn_attachment_circuit_ids.iter().enumerate() {
+            gauge(
+                out,
+                "cm3500_l2vpn_attachment_circuit_info",
+                &[("index", &(index + 1).to_string()), ("id", id)],
+                1.0,
+            );
+        }
+        out.push('\n');
     }
 }
 
@@ -733,20 +779,27 @@ fn render_cm_state(out: &mut String, state: &crate::parser::CmState) {
         );
     }
 
-    for (family, attempts) in [
-        ("ipv4", state.dhcp_ipv4_attempts),
-        ("ipv6", state.dhcp_ipv6_attempts),
-    ] {
-        if let Some(value) = attempts {
-            labeled_metric(
-                out,
-                "cm3500_dhcp_attempts",
-                "Number of DHCP attempts to obtain a CM IP address",
-                "gauge",
-                &[("family", family)],
-                &value.to_string(),
-            );
+    if state.dhcp_ipv4_attempts.is_some() || state.dhcp_ipv6_attempts.is_some() {
+        header(
+            out,
+            "cm3500_dhcp_attempts",
+            "Number of DHCP attempts to obtain a CM IP address",
+            "gauge",
+        );
+        for (family, attempts) in [
+            ("ipv4", state.dhcp_ipv4_attempts),
+            ("ipv6", state.dhcp_ipv6_attempts),
+        ] {
+            if let Some(value) = attempts {
+                gauge(
+                    out,
+                    "cm3500_dhcp_attempts",
+                    &[("family", family)],
+                    value as f64,
+                );
+            }
         }
+        out.push('\n');
     }
 }
 
@@ -1636,7 +1689,7 @@ fn render_section_parse_status(out: &mut String, status: &ParseStatus) {
     out.push('\n');
 }
 
-pub fn render_error_metrics(err: &str, scrape_duration_secs: f64) -> String {
+pub fn render_error_metrics(_err: &str, scrape_duration_secs: f64) -> String {
     let mut out = String::new();
     metric(
         &mut out,
@@ -1659,15 +1712,14 @@ pub fn render_error_metrics(err: &str, scrape_duration_secs: f64) -> String {
         "gauge",
         "0",
     );
-    labeled_metric(
+    metric(
         &mut out,
         "cm3500_scrape_error",
-        "Last scrape error message",
+        "Whether the last scrape encountered an error",
         "gauge",
-        &[("error", err)],
         "1",
     );
-    out
+    dedupe_metric_headers(out)
 }
 
 pub fn render_parse_error_metrics(

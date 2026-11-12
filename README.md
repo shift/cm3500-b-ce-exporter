@@ -4,7 +4,8 @@
 
 A Prometheus exporter for the ARRIS CM3500B CE (EuroDOCSIS 3.0 / DOCSIS 3.1) cable modem. Scrapes the modem's web interface and exposes metrics in Prometheus format. Includes a Grafana dashboard and Prometheus alerting rules.
 
-Licensed under [AGPL-3.0-or-later](LICENSE).
+Licensed under [AGPL-3.0-or-later](LICENSE). See [CHANGELOG.md](CHANGELOG.md)
+for release and upgrade notes.
 
 ## Quick Start
 
@@ -58,7 +59,12 @@ docker compose up -d
 This starts the exporter, Prometheus, and Grafana with the dashboard pre-loaded:
 - Exporter metrics are internal to the Compose network (not published)
 - Prometheus: http://127.0.0.1:9090
+- Alertmanager: http://127.0.0.1:9093
 - Grafana: http://127.0.0.1:3000
+
+Alertmanager ships with an empty default receiver so alerts are visible in its
+UI but not delivered. Add your email/webhook/PagerDuty receiver in
+`prometheus/alertmanager.yml` to page.
 
 The exporter endpoint contains modem serial numbers, interface MAC addresses,
 and network state. Treat `/metrics` as sensitive internal telemetry and do not
@@ -72,7 +78,7 @@ cm3500-b-ce-exporter --password <PASSWORD> [OPTIONS]
 Options:
   --modem-url <URL>         Modem base URL [default: https://192.168.100.1]
   --username <USER>         Login username [default: admin]
-  --password <PASS>         Login password (required)
+  --password <PASS>         Login password (or set MODEM_PASSWORD)
   --listen <ADDR>              Listen address [default: 127.0.0.1:10044]
   --disable-prometheus         Disable the Prometheus /metrics HTTP endpoint entirely
   --interval <SECONDS>         Scrape interval [default: 30]
@@ -129,6 +135,11 @@ cm3500-b-ce-exporter \
 ```
 
 Both Prometheus `/metrics` and OTLP push can run simultaneously. If `--otlp-endpoint` points at an OTLP base URL like `https://.../otlp`, the exporter sends metrics to `/v1/metrics` and logs to `/v1/logs` under that base. When `--disable-prometheus` is set, the exporter does not bind any HTTP port.
+
+OTLP backends that translate metric names may append type-related suffixes
+(for example `_total` or `_bytes`). If you use the supplied OTLP alert rules or
+dashboard, configure the collector with `add_metric_suffixes=false`, or update
+the PromQL names to match your pipeline.
 
 ## Gateway Automation Outputs
 
@@ -262,7 +273,7 @@ and rotate these files accordingly.
 | `cm3500_interface_up` | gauge | Interface operational status (1 = Up) |
 | `cm3500_cpe_static` | gauge | Number of static CPE devices detected |
 | `cm3500_cpe_dynamic` | gauge | Number of dynamic CPE devices detected |
-| `cm3500_status_info` | gauge | Time, product type, hardware info, router/telemetry state, RF hardware, market |
+| `cm3500_status_info` | gauge | Product type, hardware info, router/telemetry state, RF hardware, market |
 | `cm3500_l2vpn_attachment_circuit_info` | gauge | L2VPN attachment circuit IDs (labels: index, id) |
 | `cm3500_diplexer_band_info` | gauge | Diplexer band ranges and current band setting |
 | `cm3500_config_file_info` | gauge | Configuration file URL |
@@ -369,6 +380,7 @@ and rotate these files accordingly.
 | `cm3500_product_severity_level` | gauge | Per-severity logging state (1 = enabled) |
 | `cm3500_dsx_log_entries` | gauge | Number of DSX message log entries |
 | `cm3500_dsx_log_entry_info` | gauge | DSX log entry details |
+| `cm3500_spectrum_scan_age_seconds` | gauge | Age of the cached spectrum scan |
 | `cm3500_spectrum_chunks` | gauge | Number of spectrum chunks returned by a scan |
 | `cm3500_spectrum_chunk_power_dbmv` | gauge | Per-chunk min/avg/max power summary |
 | `cm3500_spectrum_chunk_metadata` | gauge | Per-chunk span/bin spacing/RBW metadata |

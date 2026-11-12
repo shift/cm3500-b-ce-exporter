@@ -343,6 +343,7 @@ pub struct ScrapedData {
     pub diplexer_bands: Vec<DiplexerBand>,
     pub dhcp_log: Vec<DhcpLogEntry>,
     pub dsx_log: Vec<DsxLogEntry>,
+    pub spectrum_age_seconds: Option<f64>,
     pub scrape_duration_secs: f64,
     pub parse_status: ParseStatus,
 }
@@ -429,8 +430,11 @@ pub fn parse_all(
     // A modem that is not operational legitimately has no bonded channels.
     // When it claims to be operational, an empty channel set means the page
     // structure changed or only part of the response was returned.
-    if cm_status.eq_ignore_ascii_case("OPERATIONAL") && !parse_status.channels {
-        missing.push("channels");
+    if cm_status.eq_ignore_ascii_case("OPERATIONAL")
+        && channels.downstream_qam.is_empty()
+        && channels.downstream_ofdm.is_empty()
+    {
+        missing.push("channels/downstream");
     }
     if !missing.is_empty() {
         return Err(ParseFailure {
@@ -464,6 +468,7 @@ pub fn parse_all(
         diplexer_bands,
         dhcp_log,
         dsx_log,
+        spectrum_age_seconds: None,
         scrape_duration_secs,
         parse_status,
     })
@@ -1102,6 +1107,10 @@ fn parse_spectrum_chunk(chunk: usize, raw: &str) -> Option<SpectrumChunk> {
     let bins = usize::try_from(get4(&mut pos)?).ok()?;
     let bin_spacing_hz = get4(&mut pos)?;
     let resolution_bandwidth = get4(&mut pos)?;
+    let remaining_hex = raw.len().saturating_sub(pos);
+    if bins > remaining_hex / 4 || bins > 1_000_000 {
+        return None;
+    }
     let mut bins_raw_tenth_dbmv = Vec::with_capacity(bins);
     for _ in 0..bins {
         bins_raw_tenth_dbmv.push(get2(&mut pos)?);
@@ -1684,7 +1693,7 @@ mod tests {
             0.1,
         )
         .unwrap_err();
-        assert_eq!(err.missing, vec!["channels"]);
+        assert_eq!(err.missing, vec!["channels/downstream"]);
         assert!(!err.status.channels);
     }
 

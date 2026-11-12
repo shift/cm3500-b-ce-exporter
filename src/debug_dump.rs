@@ -12,7 +12,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn write_failed_scrape(dir: &Path, pages: &ScrapedPages, error: &str) -> Result<PathBuf> {
     fs::create_dir_all(dir)
         .with_context(|| format!("failed to create debug directory {}", dir.display()))?;
-    set_private_dir_permissions(dir)?;
 
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -36,7 +35,28 @@ pub fn write_failed_scrape(dir: &Path, pages: &ScrapedPages, error: &str) -> Res
         write_private(&out_dir.join(name), &redact(body))?;
     }
     write_private(&out_dir.join("parse-error.txt"), &redact(error))?;
+    prune_old_bundles(dir, 10)?;
     Ok(out_dir)
+}
+
+fn prune_old_bundles(dir: &Path, keep: usize) -> Result<()> {
+    let mut bundles: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_dir()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("failed-scrape-"))
+        })
+        .collect();
+    bundles.sort();
+    let remove_count = bundles.len().saturating_sub(keep);
+    for path in bundles.into_iter().take(remove_count) {
+        let _ = fs::remove_dir_all(path);
+    }
+    Ok(())
 }
 
 pub fn redact(input: &str) -> String {
@@ -87,16 +107,6 @@ fn create_private_dir(path: &Path) -> Result<()> {
     builder
         .create(path)
         .with_context(|| format!("failed to create {}", path.display()))?;
-    Ok(())
-}
-
-fn set_private_dir_permissions(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("failed to set permissions on {}", path.display()))?;
-    }
     Ok(())
 }
 

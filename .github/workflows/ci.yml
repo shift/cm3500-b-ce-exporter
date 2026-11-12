@@ -45,3 +45,33 @@ jobs:
         with:
           components: clippy
       - run: cargo clippy --all-targets -- -D warnings
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  rules:
+    name: Prometheus rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate alert rules and dashboards
+        run: |
+          jq empty grafana/dashboard.json grafana/dashboard_otlp.json
+          for f in prometheus/alert_rules_*.yml; do
+            docker run --rm -v "$PWD/prometheus:/rules" prom/prometheus:latest \
+              promtool check rules "/rules/$(basename "$f")"
+          done
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t cm3500-exporter:test .
+      - run: docker run --rm cm3500-exporter:test --version

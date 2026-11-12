@@ -98,12 +98,13 @@ impl ModemClient {
             .send()
             .await?;
 
-        if !resp.status().is_success() {
-            return Err(anyhow!("Login failed: HTTP {}", resp.status()));
+        let status = resp.status();
+        if !status.is_success() && !status.is_redirection() {
+            return Err(anyhow!("Login failed: HTTP {}", status));
         }
 
         let body = resp.text().await?;
-        if body.contains("csrf_token") {
+        if body.contains("csrf_token") || status.is_redirection() {
             tracing::info!("Login successful");
             Ok(())
         } else if body.contains("login_cgi") {
@@ -125,6 +126,9 @@ impl ModemClient {
         }
 
         let html = resp.text().await?;
+        if Self::is_session_expired(&html) {
+            return Err(anyhow!("Session expired"));
+        }
         Ok(html)
     }
 
@@ -140,7 +144,11 @@ impl ModemClient {
             return Err(anyhow!("POST {} failed: HTTP {}", endpoint, resp.status()));
         }
 
-        Ok(resp.text().await?)
+        let html = resp.text().await?;
+        if Self::is_session_expired(&html) {
+            return Err(anyhow!("Session expired"));
+        }
+        Ok(html)
     }
 
     fn is_session_expired(html: &str) -> bool {
@@ -180,21 +188,28 @@ impl ModemClient {
         }
     }
 
+    async fn fetch_optional(&self, endpoint: &str) -> Result<String> {
+        match self.fetch_page(endpoint).await {
+            Ok(html) => Ok(html),
+            Err(e) if e.to_string().contains("Session expired") => Err(e),
+            Err(e) => {
+                tracing::warn!("Optional page {} failed ({}), continuing", endpoint, e);
+                Ok(String::new())
+            }
+        }
+    }
+
     async fn try_fetch_all(&self) -> Result<ScrapedPages> {
         let status = self.fetch_page("status_cgi").await?;
-        if Self::is_session_expired(&status) {
-            return Err(anyhow!("Session expired"));
-        }
-
         let vers = self.fetch_page("vers_cgi").await?;
-        let dhcp = self.fetch_page("dhcp_cgi").await?;
-        let qos = self.fetch_page("qos_cgi").await?;
-        let cm_state = self.fetch_page("cm_state_cgi").await?;
-        let event = self.fetch_page("event_cgi").await?;
-        let config_params = self.fetch_page("config_params_cgi").await?;
-        let product = self.fetch_page("product_cgi").await?;
-        let dhcp_log = self.fetch_page("dhcp_cmLog_cgi").await?;
-        let dsx = self.fetch_page("dsx_cgi").await?;
+        let dhcp = self.fetch_optional("dhcp_cgi").await?;
+        let qos = self.fetch_optional("qos_cgi").await?;
+        let cm_state = self.fetch_optional("cm_state_cgi").await?;
+        let event = self.fetch_optional("event_cgi").await?;
+        let config_params = self.fetch_optional("config_params_cgi").await?;
+        let product = self.fetch_optional("product_cgi").await?;
+        let dhcp_log = self.fetch_optional("dhcp_cmLog_cgi").await?;
+        let dsx = self.fetch_optional("dsx_cgi").await?;
 
         Ok(ScrapedPages {
             status,

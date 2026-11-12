@@ -1,9 +1,9 @@
 services:
   exporter:
     build: .
+    environment:
+      - "MODEM_PASSWORD=${MODEM_PASSWORD:?set MODEM_PASSWORD in .env or the environment}"
     command:
-      - "--password"
-      - "${MODEM_PASSWORD:?set MODEM_PASSWORD in .env or the environment}"
       - "--listen"
       - "0.0.0.0:10044"
       - "--modem-url"
@@ -32,6 +32,16 @@ services:
     # required; the Prometheus API is unauthenticated.
     ports:
       - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    depends_on:
+      - prometheus
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
     restart: unless-stopped
 
   grafana:

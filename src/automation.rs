@@ -444,6 +444,7 @@ mod tests {
             diplexer_bands: vec![],
             dhcp_log: vec![],
             dsx_log: vec![],
+            spectrum_age_seconds: None,
             scrape_duration_secs: 0.0,
             parse_status: Default::default(),
         };

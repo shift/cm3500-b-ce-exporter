@@ -19,7 +19,9 @@ They are intentionally policy-light and meant to be adapted for your own gateway
 ## Exporter example
 
 ```ini
-ExecStart=/usr/bin/cm3500-exporter \
+# Put MODEM_PASSWORD in this file instead of the command line.
+EnvironmentFile=/etc/cm3500/exporter.env
+ExecStart=/usr/bin/cm3500-b-ce-exporter \
   --modem-url https://192.168.100.1 \
   --insecure-tls \
   --state-file /run/cm3500/link-state.json \
