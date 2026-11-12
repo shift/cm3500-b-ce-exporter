@@ -436,6 +436,9 @@ Load this file **instead of** the three Prometheus rule files when using an OTLP
 
 ## Prometheus Configuration
 
+For a host install, scrape the exporter's loopback listener. For the provided
+Compose stack, use `exporter:10044` and keep the exporter port unpublished.
+
 ```yaml
 scrape_configs:
   - job_name: 'cm3500'
