@@ -1,4 +1,4 @@
-use cm3500_b_ce_exporter::{automation, client, debug_dump, metrics, otlp, parser};
+use cm3500_b_ce_exporter::{automation, client, counters, debug_dump, metrics, otlp, parser};
 
 use anyhow::{bail, Result};
 use clap::Parser;
@@ -263,11 +263,13 @@ async fn main() -> Result<()> {
     );
 
     let mut spectrum_cache = SpectrumCache::default();
+    let event_counters = counters::EventCounters::new();
     let spectrum_interval = Duration::from_secs(args.spectrum_interval);
     let otlp_for_initial = otlp_client.read().await.clone();
     let initial_scrape = do_scrape(
         &client,
         otlp_for_initial.as_deref(),
+        &event_counters,
         args.capacity_margin_percent,
         args.enable_spectrum,
         spectrum_interval,
@@ -287,6 +289,7 @@ async fn main() -> Result<()> {
         let state = state.clone();
         let otlp_client = otlp_client.clone();
         let client = client.clone();
+        let event_counters = event_counters.clone();
         let interval_secs = args.interval;
         let capacity_margin_percent = args.capacity_margin_percent;
         let enable_spectrum = args.enable_spectrum;
@@ -305,6 +308,7 @@ async fn main() -> Result<()> {
                 let scrape = do_scrape(
                     &client,
                     otlp.as_deref(),
+                    &event_counters,
                     capacity_margin_percent,
                     enable_spectrum,
                     spectrum_interval,
@@ -336,9 +340,11 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn do_scrape(
     client: &client::ModemClient,
     otlp: Option<&otlp::OtlpClient>,
+    event_counters: &counters::EventCounters,
     capacity_margin_percent: u8,
     enable_spectrum: bool,
     spectrum_interval: Duration,
@@ -389,15 +395,23 @@ async fn do_scrape(
                         duration,
                     );
 
+                    let counter_snapshot = event_counters.observe(&data.events);
                     if let Some(otlp) = otlp {
-                        match otlp.push(&data, capacity_margin_percent).await {
+                        match otlp
+                            .push(&data, capacity_margin_percent, Some(&counter_snapshot))
+                            .await
+                        {
                             Ok(()) => tracing::debug!("OTLP push OK"),
                             Err(e) => tracing::warn!("OTLP push failed: {}", e),
                         }
                     }
 
                     ScrapeResult {
-                        metrics_text: metrics::render_metrics(&data, capacity_margin_percent),
+                        metrics_text: {
+                            let mut text = metrics::render_metrics(&data, capacity_margin_percent);
+                            metrics::append_event_counters(&mut text, &counter_snapshot);
+                            text
+                        },
                         observation: automation::ScrapeObservation::from_data(
                             &data,
                             capacity_margin_percent,
@@ -665,9 +679,11 @@ mod tests {
         )
         .unwrap();
         let mut cache = SpectrumCache::default();
+        let event_counters = counters::EventCounters::new();
         let result = do_scrape(
             &client,
             None,
+            &event_counters,
             95,
             true,
             Duration::from_secs(0),

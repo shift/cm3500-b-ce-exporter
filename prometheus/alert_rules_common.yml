@@ -75,7 +75,7 @@ groups:
 
       # Event log gauges: detect changes in the rolling log over time
       - alert: CM3500T3Timeouts
-        expr: changes(cm3500_event_t3_timeouts[10m]) > 0
+        expr: increase(cm3500_event_t3_timeouts_total[10m]) > 0
         for: 0m
         labels:
           severity: warning
@@ -84,7 +84,7 @@ groups:
           description: "{{ $value }} T3 (No Ranging Response) timeout events in the last 10 minutes. This indicates upstream communication problems with the CMTS."
 
       - alert: CM3500T4Timeouts
-        expr: changes(cm3500_event_t4_timeouts[10m]) > 0
+        expr: increase(cm3500_event_t4_timeouts_total[10m]) > 0
         for: 0m
         labels:
           severity: warning
@@ -93,7 +93,7 @@ groups:
           description: "{{ $value }} T4 timeout events in the last 10 minutes."
 
       - alert: CM3500DHCPFailures
-        expr: changes(cm3500_event_dhcp_failures[10m]) > 0
+        expr: increase(cm3500_event_dhcp_failures_total[10m]) > 0
         for: 0m
         labels:
           severity: warning
@@ -102,7 +102,7 @@ groups:
           description: "{{ $value }} DHCP failure events in the last 10 minutes."
 
       - alert: CM3500DHCPRenewWarnings
-        expr: delta(cm3500_event_dhcp_renew_warnings[10m]) > 5
+        expr: increase(cm3500_event_dhcp_renew_warnings_total[10m]) > 5
         for: 2m
         labels:
           severity: warning
@@ -111,7 +111,7 @@ groups:
           description: "{{ $value }} DHCP RENEW WARNING events in the last 10 minutes. May indicate CMTS or DHCP server issues."
 
       - alert: CM3500ProfileChanges
-        expr: changes(cm3500_event_profile_changes[10m]) > 0
+        expr: increase(cm3500_event_profile_changes_total[10m]) > 0
         for: 0m
         labels:
           severity: info
@@ -120,7 +120,7 @@ groups:
           description: "{{ $value }} upstream OFDMA profile assignment changes in the last 10 minutes."
 
       - alert: CM3500DHCPRenewNoResponse
-        expr: changes(cm3500_event_dhcp_renew_no_response[10m]) > 0
+        expr: increase(cm3500_event_dhcp_renew_no_response_total[10m]) > 0
         for: 0m
         labels:
           severity: warning

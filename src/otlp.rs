@@ -1,3 +1,4 @@
+use crate::counters::EventCounterSnapshot;
 use crate::parser::{DhcpLogEntry, DsxLogEntry, EventLogEntry, ScrapedData};
 use anyhow::{anyhow, Result};
 use reqwest::Client;
@@ -92,9 +93,15 @@ impl OtlpClient {
         self.resource_attrs.lock().unwrap().clone()
     }
 
-    pub async fn push(&self, data: &ScrapedData, capacity_margin_percent: u8) -> Result<()> {
+    pub async fn push(
+        &self,
+        data: &ScrapedData,
+        capacity_margin_percent: u8,
+        event_counters: Option<&EventCounterSnapshot>,
+    ) -> Result<()> {
         self.enrich_from_data(data);
-        self.push_metrics(data, capacity_margin_percent).await?;
+        self.push_metrics(data, capacity_margin_percent, event_counters)
+            .await?;
         self.push_logs(data).await?;
         Ok(())
     }
@@ -130,16 +137,37 @@ impl OtlpClient {
         )
     }
 
-    async fn push_metrics(&self, data: &ScrapedData, capacity_margin_percent: u8) -> Result<()> {
-        let body = self.build_metrics_body(data, &now_nanos(), capacity_margin_percent);
+    async fn push_metrics(
+        &self,
+        data: &ScrapedData,
+        capacity_margin_percent: u8,
+        event_counters: Option<&EventCounterSnapshot>,
+    ) -> Result<()> {
+        let body = self.build_metrics_body_with_counters(
+            data,
+            &now_nanos(),
+            capacity_margin_percent,
+            event_counters,
+        );
         self.post_json(&self.metrics_endpoint, &body).await
     }
 
+    #[cfg(test)]
     fn build_metrics_body(
         &self,
         data: &ScrapedData,
         now: &str,
         capacity_margin_percent: u8,
+    ) -> Value {
+        self.build_metrics_body_with_counters(data, now, capacity_margin_percent, None)
+    }
+
+    fn build_metrics_body_with_counters(
+        &self,
+        data: &ScrapedData,
+        now: &str,
+        capacity_margin_percent: u8,
+        event_counters: Option<&EventCounterSnapshot>,
     ) -> Value {
         let counter_start = self.counter_start(data.uptime_seconds, now);
         let counter_start = counter_start.as_str();
@@ -180,6 +208,50 @@ impl OtlpClient {
             "1",
             section_parse,
         ));
+
+        if let Some(counters) = event_counters {
+            for (name, description, value) in [
+                (
+                    "hw.cable_modem.cmts.t3_timeouts.total",
+                    "Monotonic T3 timeout count observed by the exporter",
+                    counters.t3_timeouts,
+                ),
+                (
+                    "hw.cable_modem.cmts.t4_timeouts.total",
+                    "Monotonic T4 timeout count observed by the exporter",
+                    counters.t4_timeouts,
+                ),
+                (
+                    "hw.cable_modem.provisioning.dhcp_failures.total",
+                    "Monotonic DHCP failure count observed by the exporter",
+                    counters.dhcp_failures,
+                ),
+                (
+                    "hw.cable_modem.provisioning.dhcp_renew_warnings.total",
+                    "Monotonic DHCP renew warning count observed by the exporter",
+                    counters.dhcp_renew_warnings,
+                ),
+                (
+                    "hw.cable_modem.provisioning.dhcp_renew_no_response.total",
+                    "Monotonic DHCP renew no-response count observed by the exporter",
+                    counters.dhcp_renew_no_response,
+                ),
+                (
+                    "hw.cable_modem.upstream.profile_changes.total",
+                    "Monotonic upstream profile change count observed by the exporter",
+                    counters.profile_changes,
+                ),
+            ] {
+                metrics.push(sum(
+                    name,
+                    description,
+                    "1",
+                    vec![f64_dp(value as f64, vec![], now)],
+                    &counters.started_at_nanos,
+                    true,
+                ));
+            }
+        }
 
         for (direction, label) in [("Upstream", "upstream"), ("Downstream", "downstream")] {
             let max_bps = data
@@ -2167,6 +2239,33 @@ mod tests {
         assert!(
             !has_as_int(&body),
             "OTLP JSON must use camelCase asInt, not as_int"
+        );
+    }
+
+    #[test]
+    fn otlp_emits_exported_event_counters() {
+        let data = sample_data();
+        let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
+        let snapshot = EventCounterSnapshot {
+            started_at_nanos: "999000000000000000".into(),
+            t3_timeouts: 2,
+            t4_timeouts: 1,
+            ..Default::default()
+        };
+        let body = client.build_metrics_body_with_counters(
+            &data,
+            "1000000000000000000",
+            95,
+            Some(&snapshot),
+        );
+        let metrics = body["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]
+            .as_array()
+            .unwrap();
+        let t3 = metric(metrics, "hw.cable_modem.cmts.t3_timeouts.total");
+        assert_eq!(t3["sum"]["dataPoints"][0]["asDouble"].as_f64(), Some(2.0));
+        assert_eq!(
+            t3["sum"]["dataPoints"][0]["startTimeUnixNano"].as_str(),
+            Some("999000000000000000")
         );
     }
 

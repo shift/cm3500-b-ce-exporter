@@ -1618,6 +1618,45 @@ fn render_dsx_log(out: &mut String, entries: &[crate::parser::DsxLogEntry]) {
     }
 }
 
+pub fn append_event_counters(out: &mut String, snapshot: &crate::counters::EventCounterSnapshot) {
+    for (name, help, value) in [
+        (
+            "cm3500_event_t3_timeouts_total",
+            "Monotonic count of T3 timeouts observed since exporter start",
+            snapshot.t3_timeouts,
+        ),
+        (
+            "cm3500_event_t4_timeouts_total",
+            "Monotonic count of T4 timeouts observed since exporter start",
+            snapshot.t4_timeouts,
+        ),
+        (
+            "cm3500_event_dhcp_failures_total",
+            "Monotonic count of DHCP failures observed since exporter start",
+            snapshot.dhcp_failures,
+        ),
+        (
+            "cm3500_event_dhcp_renew_warnings_total",
+            "Monotonic count of DHCP renew warnings observed since exporter start",
+            snapshot.dhcp_renew_warnings,
+        ),
+        (
+            "cm3500_event_dhcp_renew_no_response_total",
+            "Monotonic count of DHCP renew no-response events observed since exporter start",
+            snapshot.dhcp_renew_no_response,
+        ),
+        (
+            "cm3500_event_profile_changes_total",
+            "Monotonic count of upstream profile changes observed since exporter start",
+            snapshot.profile_changes,
+        ),
+    ] {
+        header(out, name, help, "counter");
+        counter(out, name, &[], value);
+        out.push('\n');
+    }
+}
+
 // Formatting helpers
 
 fn escape(s: &str) -> String {

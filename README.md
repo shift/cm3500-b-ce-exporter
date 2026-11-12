@@ -361,7 +361,13 @@ and rotate these files accordingly.
 | Metric | Type | Description |
 |--------|------|-------------|
 | `cm3500_event_log_entries` | gauge | Entry count in the event log by event ID |
-| `cm3500_event_t3_timeouts` | gauge | T3 timeouts (No Ranging Response) in event log |
+| `cm3500_event_t3_timeouts_total` | counter | Monotonic T3 timeouts observed since exporter start |
+| `cm3500_event_t4_timeouts_total` | counter | Monotonic T4 timeouts observed since exporter start |
+| `cm3500_event_dhcp_failures_total` | counter | Monotonic DHCP failures observed since exporter start |
+| `cm3500_event_dhcp_renew_warnings_total` | counter | Monotonic DHCP renew warnings observed since exporter start |
+| `cm3500_event_dhcp_renew_no_response_total` | counter | Monotonic DHCP renew no-response events observed since exporter start |
+| `cm3500_event_profile_changes_total` | counter | Monotonic upstream profile changes observed since exporter start |
+| `cm3500_event_t3_timeouts` | gauge | T3 timeouts (No Ranging Response) in current event log window |
 | `cm3500_event_t4_timeouts` | gauge | T4 timeouts in event log |
 | `cm3500_event_dhcp_failures` | gauge | DHCP failures in event log |
 | `cm3500_event_dhcp_renew_warnings` | gauge | DHCP renew warnings in event log |
