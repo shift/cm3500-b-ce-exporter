@@ -1,6 +1,6 @@
-use crate::parser::ScrapedData;
+use crate::parser::{ParseStatus, ScrapedData};
 
-pub fn render_metrics(data: &ScrapedData) -> String {
+pub fn render_metrics(data: &ScrapedData, capacity_margin_percent: u8) -> String {
     let mut out = String::with_capacity(8192);
 
     // Scrape metrics
@@ -18,6 +18,14 @@ pub fn render_metrics(data: &ScrapedData) -> String {
         "gauge",
         data.scrape_duration_secs,
     );
+    metric(
+        &mut out,
+        "cm3500_parse_success",
+        "Whether the required modem page fields parsed successfully",
+        "gauge",
+        "1",
+    );
+    render_section_parse_status(&mut out, &data.parse_status);
 
     // Info metric
     labeled_metric(
@@ -73,8 +81,56 @@ pub fn render_metrics(data: &ScrapedData) -> String {
     render_spectrum(&mut out, &data.spectrum);
     render_cpe(&mut out, data.cpe_static, data.cpe_dynamic);
     render_service_flow_configs(&mut out, &data.service_flow_configs);
+    render_capacity(
+        &mut out,
+        &data.service_flow_configs,
+        capacity_margin_percent,
+    );
 
     out
+}
+
+fn render_capacity(
+    out: &mut String,
+    flows: &[crate::parser::ServiceFlowConfig],
+    margin_percent: u8,
+) {
+    for (direction, label) in [("Upstream", "upstream"), ("Downstream", "downstream")] {
+        let max_kbps = flows
+            .iter()
+            .filter(|f| f.direction.eq_ignore_ascii_case(direction))
+            .map(|f| f.max_traffic_rate_kbps)
+            .max();
+        let Some(max_kbps) = max_kbps else {
+            continue;
+        };
+        let provisioned_bps = max_kbps.saturating_mul(1000);
+        let estimated_bps = provisioned_bps.saturating_mul(margin_percent as u64) / 100;
+        let margin_label = margin_percent.to_string();
+        labeled_metric(
+            out,
+            "cm3500_capacity_provisioned_bps",
+            "Highest individual provisioned service-flow rate per direction (not aggregate or measured throughput)",
+            "gauge",
+            &[
+                ("direction", label),
+                ("basis", "max_individual_service_flow_rate"),
+            ],
+            &provisioned_bps.to_string(),
+        );
+        labeled_metric(
+            out,
+            "cm3500_capacity_estimated_bps",
+            "Estimated usable capacity after applying the configured margin (not measured throughput)",
+            "gauge",
+            &[
+                ("direction", label),
+                ("basis", "max_individual_service_flow_rate"),
+                ("margin_percent", margin_label.as_str()),
+            ],
+            &estimated_bps.to_string(),
+        );
+    }
 }
 
 fn render_downstream_qam(out: &mut String, channels: &[crate::parser::DownstreamQam]) {
@@ -961,6 +1017,23 @@ fn labeled_metric(
     out.push_str(&format!("{}{} {}\n\n", name, format_labels(labels), value));
 }
 
+fn render_section_parse_status(out: &mut String, status: &ParseStatus) {
+    header(
+        out,
+        "cm3500_section_parse_success",
+        "Whether each modem response section parsed successfully",
+        "gauge",
+    );
+    for (section, ok) in status.iter() {
+        out.push_str(&format!(
+            "cm3500_section_parse_success{{section=\"{}\"}} {}\n",
+            section,
+            u8::from(ok)
+        ));
+    }
+    out.push('\n');
+}
+
 pub fn render_error_metrics(err: &str, scrape_duration_secs: f64) -> String {
     let mut out = String::new();
     metric(
@@ -977,6 +1050,13 @@ pub fn render_error_metrics(err: &str, scrape_duration_secs: f64) -> String {
         "gauge",
         scrape_duration_secs,
     );
+    metric(
+        &mut out,
+        "cm3500_parse_success",
+        "Whether the required modem page fields parsed successfully",
+        "gauge",
+        "0",
+    );
     labeled_metric(
         &mut out,
         "cm3500_scrape_error",
@@ -985,5 +1065,15 @@ pub fn render_error_metrics(err: &str, scrape_duration_secs: f64) -> String {
         &[("error", err)],
         "1",
     );
+    out
+}
+
+pub fn render_parse_error_metrics(
+    err: &str,
+    scrape_duration_secs: f64,
+    status: &ParseStatus,
+) -> String {
+    let mut out = render_error_metrics(err, scrape_duration_secs);
+    render_section_parse_status(&mut out, status);
     out
 }

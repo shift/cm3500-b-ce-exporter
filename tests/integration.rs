@@ -46,10 +46,14 @@ fn test_full_pipeline_status_to_metrics() {
     assert_eq!(data.product_info.ethernet_phy_type, "1x2.5G-GPY21X switch");
     assert_eq!(data.spectrum.len(), 1);
 
-    let output = metrics::render_metrics(&data);
+    let output = metrics::render_metrics(&data, 95);
 
     // Verify key metrics appear in output
     assert!(output.contains("cm3500_up 1"));
+    assert!(output.contains("cm3500_parse_success 1"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"status\"} 1"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"channels\"} 1"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"version\"} 1"));
     assert!(output.contains("cm3500_scrape_duration_seconds 1.5"));
     assert!(output.contains("cm3500_cm_status{status=\"OPERATIONAL\"}"));
     assert!(output.contains("cm3500_downstream_qam_power_dbmv{"));
@@ -76,6 +80,9 @@ fn test_full_pipeline_status_to_metrics() {
 
     // Verify service flow config metrics
     assert!(output.contains("cm3500_qos_max_traffic_rate_kbps{"));
+    assert!(output.contains("cm3500_capacity_provisioned_bps{direction=\"upstream\""));
+    assert!(output.contains("cm3500_capacity_estimated_bps{direction=\"downstream\""));
+    assert!(output.contains("margin_percent=\"95\""));
     assert!(output.contains("cm3500_product_ethernet_phy_info{"));
     assert!(output.contains("cm3500_product_logging_components_enabled{"));
     assert!(output.contains("cm3500_spectrum_chunks 1"));
@@ -100,8 +107,35 @@ fn test_full_pipeline_status_to_metrics() {
 fn test_error_metrics() {
     let output = metrics::render_error_metrics("connection refused", 2.5);
     assert!(output.contains("cm3500_up 0"));
+    assert!(output.contains("cm3500_parse_success 0"));
     assert!(output.contains("cm3500_scrape_duration_seconds 2.5"));
     assert!(output.contains("cm3500_scrape_error{error=\"connection refused\"}"));
+}
+
+#[test]
+fn test_changed_firmware_structure_fails_loudly() {
+    let status_html =
+        include_str!("fixtures/status_cgi.html").replace("CM Status:", "Modem State:");
+    let err = parser::parse_all(
+        &status_html,
+        include_str!("fixtures/vers_cgi.html"),
+        include_str!("fixtures/dhcp_cgi.html"),
+        include_str!("fixtures/qos_cgi.html"),
+        include_str!("fixtures/cm_state_cgi.html"),
+        include_str!("fixtures/event_cgi.html"),
+        include_str!("fixtures/config_params_cgi.html"),
+        "",
+        None,
+        1.0,
+    )
+    .expect_err("a missing status field must not look like a successful scrape");
+
+    assert!(err.missing.contains(&"status"));
+    let output = metrics::render_parse_error_metrics(&err.to_string(), 1.0, &err.status);
+    assert!(output.contains("cm3500_up 0"));
+    assert!(output.contains("cm3500_parse_success 0"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"status\"} 0"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"version\"} 1"));
 }
 
 #[test]
@@ -129,7 +163,7 @@ fn test_metrics_format_valid() {
     )
     .unwrap();
 
-    let output = metrics::render_metrics(&data);
+    let output = metrics::render_metrics(&data, 95);
 
     // Every non-comment, non-empty line should be parseable as NAME{labels} VALUE
     for line in output.lines() {

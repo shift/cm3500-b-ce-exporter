@@ -1,8 +1,8 @@
-use cm3500_b_ce_exporter::{automation, client, metrics, otlp, parser};
+use cm3500_b_ce_exporter::{automation, client, debug_dump, metrics, otlp, parser};
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -27,7 +27,7 @@ struct Args {
     password: String,
 
     /// Listen address for the Prometheus metrics server
-    #[arg(long, default_value = "0.0.0.0:10044")]
+    #[arg(long, default_value = "127.0.0.1:10044")]
     listen: String,
 
     /// Disable the Prometheus /metrics HTTP endpoint entirely
@@ -37,6 +37,32 @@ struct Args {
     /// Scrape interval in seconds
     #[arg(long, default_value_t = 30)]
     interval: u64,
+
+    /// TCP connection timeout in seconds
+    #[arg(long, default_value_t = 5)]
+    connect_timeout: u64,
+
+    /// Total HTTP request timeout in seconds
+    #[arg(long, default_value_t = 15)]
+    request_timeout: u64,
+
+    /// Accept invalid/self-signed modem TLS certificates (required for the
+    /// CM3500B's built-in certificate)
+    #[arg(long)]
+    insecure_tls: bool,
+
+    /// PEM CA certificate to trust for modem TLS instead of --insecure-tls
+    #[arg(long, value_name = "PATH")]
+    ca_cert: Option<PathBuf>,
+
+    /// On structural parse failure, write redacted raw modem HTML here
+    #[arg(long, value_name = "DIR")]
+    debug_html_dir: Option<PathBuf>,
+
+    /// Mark /ready as failed when no successful scrape has completed within
+    /// this many seconds [default: max(60, 3 × interval)]
+    #[arg(long, value_name = "SECONDS")]
+    readiness_stale_after: Option<u64>,
 
     /// Write connection state changes to this JSON file
     #[arg(long, value_name = "PATH")]
@@ -78,6 +104,21 @@ struct Args {
 struct ScrapeResult {
     metrics_text: String,
     observation: automation::ScrapeObservation,
+    success: bool,
+    error: Option<String>,
+}
+
+#[derive(Default)]
+struct HealthState {
+    last_success: Option<Instant>,
+    last_error: Option<String>,
+}
+
+#[derive(Clone)]
+struct AppState {
+    metrics_text: Arc<RwLock<String>>,
+    health: Arc<RwLock<HealthState>>,
+    ready_stale_after: Duration,
 }
 
 #[derive(Default)]
@@ -105,12 +146,24 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+    validate_args(&args)?;
 
     if args.disable_prometheus && args.otlp_endpoint.is_none() {
         bail!("--disable-prometheus requires --otlp-endpoint");
     }
 
-    let client = client::ModemClient::new(&args.modem_url, &args.username, &args.password)?;
+    let client_options = client::ClientOptions {
+        connect_timeout: Duration::from_secs(args.connect_timeout),
+        request_timeout: Duration::from_secs(args.request_timeout),
+        insecure_tls: args.insecure_tls,
+        ca_cert: args.ca_cert.clone(),
+    };
+    let client = client::ModemClient::new(
+        &args.modem_url,
+        &args.username,
+        &args.password,
+        &client_options,
+    )?;
 
     tracing::info!("Logging into modem at {}", args.modem_url);
     client.login().await?;
@@ -130,6 +183,7 @@ async fn main() -> Result<()> {
         args.capacity_margin_percent,
         args.enable_spectrum,
         spectrum_interval,
+        args.debug_html_dir.as_deref(),
         &mut spectrum_cache,
     )
     .await;
@@ -138,7 +192,17 @@ async fn main() -> Result<()> {
             tracing::warn!("Failed to write automation output files: {}", e);
         }
     }
-    let metrics_text: Arc<RwLock<String>> = Arc::new(RwLock::new(initial_scrape.metrics_text));
+    let ready_stale_after = Duration::from_secs(
+        args.readiness_stale_after
+            .unwrap_or_else(|| args.interval.saturating_mul(3).max(60)),
+    );
+    let health = Arc::new(RwLock::new(HealthState::default()));
+    record_health(&health, &initial_scrape).await;
+    let state = AppState {
+        metrics_text: Arc::new(RwLock::new(initial_scrape.metrics_text)),
+        health,
+        ready_stale_after,
+    };
 
     let otlp_headers: Vec<(String, String)> = args
         .otlp_headers
@@ -162,15 +226,18 @@ async fn main() -> Result<()> {
         };
 
     let scrape_handle = {
-        let metrics_text = metrics_text.clone();
+        let state = state.clone();
         let otlp_client = otlp_client.clone();
         let client = client.clone();
         let interval_secs = args.interval;
         let capacity_margin_percent = args.capacity_margin_percent;
         let enable_spectrum = args.enable_spectrum;
         let spectrum_interval = Duration::from_secs(args.spectrum_interval);
+        let debug_html_dir = args.debug_html_dir.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            let period = Duration::from_secs(interval_secs);
+            let mut interval =
+                tokio::time::interval_at(tokio::time::Instant::now() + period, period);
             let mut automation_outputs = automation_outputs;
             let mut spectrum_cache = spectrum_cache;
             loop {
@@ -183,6 +250,7 @@ async fn main() -> Result<()> {
                     capacity_margin_percent,
                     enable_spectrum,
                     spectrum_interval,
+                    debug_html_dir.as_deref(),
                     &mut spectrum_cache,
                 )
                 .await;
@@ -191,7 +259,8 @@ async fn main() -> Result<()> {
                         tracing::warn!("Failed to write automation output files: {}", e);
                     }
                 }
-                let mut guard = metrics_text.write().await;
+                record_health(&state.health, &scrape).await;
+                let mut guard = state.metrics_text.write().await;
                 *guard = scrape.metrics_text;
             }
         })
@@ -204,8 +273,9 @@ async fn main() -> Result<()> {
         let app = axum::Router::new()
             .route("/metrics", axum::routing::get(metrics_handler))
             .route("/health", axum::routing::get(health_handler))
+            .route("/ready", axum::routing::get(ready_handler))
             .route("/", axum::routing::get(landing_handler))
-            .with_state(metrics_text);
+            .with_state(state);
 
         let listener = tokio::net::TcpListener::bind(&args.listen).await?;
         tracing::info!("Listening on {}", args.listen);
@@ -227,6 +297,7 @@ async fn do_scrape(
     capacity_margin_percent: u8,
     enable_spectrum: bool,
     spectrum_interval: Duration,
+    debug_html_dir: Option<&Path>,
     spectrum_cache: &mut SpectrumCache,
 ) -> ScrapeResult {
     let start = Instant::now();
@@ -275,44 +346,103 @@ async fn do_scrape(
                     }
 
                     ScrapeResult {
-                        metrics_text: metrics::render_metrics(&data),
+                        metrics_text: metrics::render_metrics(&data, capacity_margin_percent),
                         observation: automation::ScrapeObservation::from_data(
                             &data,
                             capacity_margin_percent,
                         ),
+                        success: true,
+                        error: None,
                     }
                 }
                 Err(e) => {
                     let duration = start.elapsed().as_secs_f64();
-                    tracing::error!("Parse error: {}", e);
+                    let message = e.to_string();
+                    tracing::error!("Parse error: {}", message);
+                    if let Some(dir) = debug_html_dir {
+                        match debug_dump::write_failed_scrape(dir, &pages, &message) {
+                            Ok(path) => tracing::warn!(
+                                "Wrote redacted failed-scrape HTML to {}",
+                                path.display()
+                            ),
+                            Err(dump_err) => {
+                                tracing::warn!("Failed to write debug HTML: {}", dump_err)
+                            }
+                        }
+                    }
                     ScrapeResult {
-                        metrics_text: metrics::render_error_metrics(&e.to_string(), duration),
+                        metrics_text: metrics::render_parse_error_metrics(
+                            &message, duration, &e.status,
+                        ),
                         observation: automation::ScrapeObservation::from_error(
-                            e.to_string(),
+                            message.clone(),
                             capacity_margin_percent,
                         ),
+                        success: false,
+                        error: Some(message),
                     }
                 }
             }
         }
         Err(e) => {
             let duration = start.elapsed().as_secs_f64();
-            tracing::error!("Fetch error: {}", e);
+            let message = e.to_string();
+            tracing::error!("Fetch error: {}", message);
             ScrapeResult {
-                metrics_text: metrics::render_error_metrics(&e.to_string(), duration),
+                metrics_text: metrics::render_error_metrics(&message, duration),
                 observation: automation::ScrapeObservation::from_error(
-                    e.to_string(),
+                    message.clone(),
                     capacity_margin_percent,
                 ),
+                success: false,
+                error: Some(message),
             }
         }
     }
 }
 
+async fn record_health(health: &RwLock<HealthState>, scrape: &ScrapeResult) {
+    let mut guard = health.write().await;
+    if scrape.success {
+        guard.last_success = Some(Instant::now());
+        guard.last_error = None;
+    } else {
+        guard.last_error = scrape.error.clone();
+    }
+}
+
+fn validate_args(args: &Args) -> Result<()> {
+    if args.interval == 0 {
+        bail!("--interval must be greater than zero");
+    }
+    if args.enable_spectrum && args.spectrum_interval == 0 {
+        bail!("--spectrum-interval must be greater than zero when --enable-spectrum is set");
+    }
+    if args.capacity_margin_percent > 100 {
+        bail!("--capacity-margin-percent must be between 0 and 100");
+    }
+    if args.connect_timeout == 0 {
+        bail!("--connect-timeout must be greater than zero");
+    }
+    if args.request_timeout == 0 {
+        bail!("--request-timeout must be greater than zero");
+    }
+    if args.state_down_threshold == 0 || args.state_up_threshold == 0 {
+        bail!("--state-down-threshold and --state-up-threshold must be greater than zero");
+    }
+    if args.readiness_stale_after == Some(0) {
+        bail!("--readiness-stale-after must be greater than zero");
+    }
+    if args.insecure_tls && args.ca_cert.is_some() {
+        bail!("--insecure-tls and --ca-cert are mutually exclusive");
+    }
+    Ok(())
+}
+
 async fn metrics_handler(
-    axum::extract::State(state): axum::extract::State<Arc<RwLock<String>>>,
+    axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl axum::response::IntoResponse {
-    let body = state.read().await.clone();
+    let body = state.metrics_text.read().await.clone();
     (
         axum::http::StatusCode::OK,
         [(
@@ -327,11 +457,80 @@ async fn health_handler() -> &'static str {
     "OK"
 }
 
+async fn ready_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl axum::response::IntoResponse {
+    let health = state.health.read().await;
+    let stale_for = health.last_success.map(|last| last.elapsed());
+    let ready = stale_for
+        .map(|age| age <= state.ready_stale_after)
+        .unwrap_or(false);
+    if ready {
+        (
+            axum::http::StatusCode::OK,
+            format!(
+                "ready\nlast_success_seconds_ago={:.1}\n",
+                stale_for.map(|d| d.as_secs_f64()).unwrap_or_default()
+            ),
+        )
+    } else {
+        let reason = match stale_for {
+            None => "no successful scrape yet".to_string(),
+            Some(age) => format!(
+                "last successful scrape was {:.1}s ago (threshold {}s)",
+                age.as_secs_f64(),
+                state.ready_stale_after.as_secs()
+            ),
+        };
+        let error = health
+            .last_error
+            .as_deref()
+            .map(|e| format!("\nlast_error={}", e))
+            .unwrap_or_default();
+        (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            format!("not ready\nreason={}{}\n", reason, error),
+        )
+    }
+}
+
 async fn landing_handler() -> axum::response::Html<&'static str> {
     axum::response::Html(
         "<!DOCTYPE html><html><head><title>ARRIS CM3500B CE Exporter</title></head>\
          <body><h1>ARRIS CM3500B CE Prometheus Exporter</h1>\
-         <p><a href=\"/metrics\">Metrics</a> | <a href=\"/health\">Health</a></p>\
+         <p><a href=\"/metrics\">Metrics</a> | <a href=\"/health\">Health</a> | \
+         <a href=\"/ready\">Readiness</a></p>\
          </body></html>",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(extra: &[&str]) -> Args {
+        let mut argv = vec!["cm3500-exporter", "--password", "test"];
+        argv.extend_from_slice(extra);
+        Args::try_parse_from(argv).expect("arguments should parse")
+    }
+
+    #[test]
+    fn rejects_zero_intervals_and_invalid_margins() {
+        assert!(validate_args(&args(&["--interval", "0"])).is_err());
+        assert!(validate_args(&args(&["--capacity-margin-percent", "101"])).is_err());
+        assert!(validate_args(&args(&["--capacity-margin-percent", "100"])).is_ok());
+        assert!(validate_args(&args(&["--connect-timeout", "0"])).is_err());
+        assert!(validate_args(&args(&["--request-timeout", "0"])).is_err());
+    }
+
+    #[test]
+    fn zero_spectrum_interval_only_rejected_when_enabled() {
+        assert!(validate_args(&args(&["--spectrum-interval", "0"])).is_ok());
+        assert!(validate_args(&args(&["--enable-spectrum", "--spectrum-interval", "0"])).is_err());
+    }
+
+    #[test]
+    fn tls_options_are_mutually_exclusive() {
+        assert!(validate_args(&args(&["--insecure-tls", "--ca-cert", "/tmp/ca.pem"])).is_err());
+    }
 }

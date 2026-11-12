@@ -21,6 +21,7 @@ They are intentionally policy-light and meant to be adapted for your own gateway
 ```ini
 ExecStart=/usr/bin/cm3500-exporter \
   --modem-url https://192.168.100.1 \
+  --insecure-tls \
   --state-file /run/cm3500/link-state.json \
   --capacity-file /run/cm3500/capacity.json \
   --state-down-threshold 3 \

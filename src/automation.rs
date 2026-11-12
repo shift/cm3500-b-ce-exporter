@@ -133,6 +133,8 @@ struct CapacitySemantic {
     shaped_upstream_bps: Option<u64>,
     shaped_downstream_bps: Option<u64>,
     source: &'static str,
+    basis: &'static str,
+    margin_percent: u8,
     valid: bool,
 }
 
@@ -146,17 +148,21 @@ impl CapacitySemantic {
             upstream_bps,
             downstream_bps,
             source: "service_flow_config",
+            basis: "max_individual_service_flow_rate",
+            margin_percent,
             valid: upstream_bps.is_some() || downstream_bps.is_some(),
         }
     }
 
-    fn invalid(_margin_percent: u8) -> Self {
+    fn invalid(margin_percent: u8) -> Self {
         Self {
             upstream_bps: None,
             downstream_bps: None,
             shaped_upstream_bps: None,
             shaped_downstream_bps: None,
             source: "service_flow_config",
+            basis: "max_individual_service_flow_rate",
+            margin_percent,
             valid: false,
         }
     }
@@ -170,6 +176,11 @@ struct CapacityFile {
     shaped_upstream_bps: Option<u64>,
     shaped_downstream_bps: Option<u64>,
     source: &'static str,
+    /// How the provisioned values were derived. Currently this is the highest
+    /// individual service-flow rate per direction, not a measured throughput.
+    basis: &'static str,
+    /// Percentage applied to the provisioned rate to produce shaped_* values.
+    margin_percent: u8,
     valid: bool,
 }
 
@@ -182,6 +193,8 @@ impl CapacityFile {
             shaped_upstream_bps: semantic.shaped_upstream_bps,
             shaped_downstream_bps: semantic.shaped_downstream_bps,
             source: semantic.source,
+            basis: semantic.basis,
+            margin_percent: semantic.margin_percent,
             valid: semantic.valid,
         }
     }
@@ -412,6 +425,7 @@ mod tests {
                 },
             ],
             scrape_duration_secs: 0.0,
+            parse_status: Default::default(),
         };
 
         let capacity = CapacitySemantic::from_data(&data, 95);
@@ -419,5 +433,7 @@ mod tests {
         assert_eq!(capacity.downstream_bps, Some(1_126_400_000));
         assert_eq!(capacity.shaped_upstream_bps, Some(121_600_000));
         assert_eq!(capacity.shaped_downstream_bps, Some(1_070_080_000));
+        assert_eq!(capacity.basis, "max_individual_service_flow_rate");
+        assert_eq!(capacity.margin_percent, 95);
     }
 }

@@ -15,5 +15,7 @@ rule_files:
 scrape_configs:
   - job_name: "cm3500"
     static_configs:
-      - targets: ["localhost:10044"]
+      # "exporter:10044" is the Compose service name. For a host install,
+      # change this to 127.0.0.1:10044 (the exporter's default listen address).
+      - targets: ["exporter:10044"]
     scrape_interval: 30s

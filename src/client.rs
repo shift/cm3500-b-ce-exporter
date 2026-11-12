@@ -1,5 +1,19 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
+use std::path::PathBuf;
+use std::time::Duration;
+
+#[derive(Debug, Clone)]
+pub struct ClientOptions {
+    pub connect_timeout: Duration,
+    pub request_timeout: Duration,
+    /// Accept self-signed or otherwise invalid TLS certificates. The CM3500B
+    /// ships a self-signed certificate and offers no certificate management,
+    /// so this is required for HTTPS in most deployments.
+    pub insecure_tls: bool,
+    /// Optional PEM CA certificate to trust instead of disabling verification.
+    pub ca_cert: Option<PathBuf>,
+}
 
 #[derive(Clone)]
 pub struct ModemClient {
@@ -21,12 +35,33 @@ pub struct ScrapedPages {
 }
 
 impl ModemClient {
-    pub fn new(base_url: &str, username: &str, password: &str) -> Result<Self> {
-        let client = Client::builder()
+    pub fn new(
+        base_url: &str,
+        username: &str,
+        password: &str,
+        options: &ClientOptions,
+    ) -> Result<Self> {
+        let mut builder = Client::builder()
             .cookie_store(true)
-            .danger_accept_invalid_certs(true)
             .redirect(reqwest::redirect::Policy::none())
-            .build()?;
+            .connect_timeout(options.connect_timeout)
+            .timeout(options.request_timeout);
+
+        if options.insecure_tls {
+            tracing::warn!(
+                "TLS certificate verification is disabled (--insecure-tls); \
+                 modem credentials could be intercepted on an untrusted network"
+            );
+            builder = builder.danger_accept_invalid_certs(true);
+        } else if let Some(path) = &options.ca_cert {
+            let pem = std::fs::read(path)
+                .with_context(|| format!("failed to read CA certificate {}", path.display()))?;
+            let cert = reqwest::Certificate::from_pem(&pem)
+                .with_context(|| format!("invalid PEM CA certificate {}", path.display()))?;
+            builder = builder.add_root_certificate(cert);
+        }
+
+        let client = builder.build()?;
         Ok(Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),

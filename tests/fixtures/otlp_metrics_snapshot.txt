@@ -5,6 +5,7 @@ network.connection.type=cable
 service.name=cm3500-exporter
 
 [metric_names]
+cm3500.exporter.parse.success
 cm3500.exporter.scrape.duration
 cm3500.exporter.status
 hw.cable_modem.cmts.t3_timeouts.count

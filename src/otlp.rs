@@ -99,6 +99,12 @@ impl OtlpClient {
             "s",
             vec![f64_dp(data.scrape_duration_secs, vec![], now)],
         ));
+        metrics.push(gauge(
+            "cm3500.exporter.parse.success",
+            "Whether the required modem page fields parsed successfully",
+            "1",
+            vec![f64_dp(1.0, vec![], now)],
+        ));
 
         if let Some(uptime) = data.uptime_seconds {
             metrics.push(sum(
@@ -1605,6 +1611,7 @@ mod tests {
                 scheduling_type: 2,
             }],
             scrape_duration_secs: 1.23,
+            parse_status: Default::default(),
         }
     }
 }

@@ -1,35 +1,48 @@
 services:
   exporter:
     build: .
-    command: ["--password", "${MODEM_PASSWORD}", "--listen", "0.0.0.0:10044", "--modem-url", "https://192.168.100.1"]
-    ports:
-      - "10044:10044"
+    command:
+      - "--password"
+      - "${MODEM_PASSWORD:?set MODEM_PASSWORD in .env or the environment}"
+      - "--listen"
+      - "0.0.0.0:10044"
+      - "--modem-url"
+      - "${MODEM_URL:-https://192.168.100.1}"
+      - "--insecure-tls"
+    expose:
+      - "10044"
     restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
+    depends_on:
+      - exporter
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=30d"
+    # Bind to loopback only. Remove or adjust deliberately if remote access is
+    # required; the Prometheus API is unauthenticated.
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
+    depends_on:
+      - prometheus
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboard.json:/var/lib/grafana/dashboards/cm3500.json
       - ./grafana/dashboard_otlp.json:/var/lib/grafana/dashboards/cm3500_otlp.json
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/cm3500.json
+      - "GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env or the environment}"
+      - "GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/cm3500.json"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     restart: unless-stopped
 
 volumes:

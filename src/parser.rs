@@ -1,5 +1,6 @@
-use anyhow::Result;
 use regex::Regex;
+use scraper::{Html, Selector};
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct DownstreamQam {
@@ -146,6 +147,63 @@ pub struct ServiceFlowConfig {
     pub scheduling_type: u32,
 }
 
+/// Per-section parse indicators. A `false` value means the section was present
+/// in the response but its expected structure could not be parsed.
+#[derive(Debug, Clone, Default)]
+pub struct ParseStatus {
+    pub status: bool,
+    pub channels: bool,
+    pub version: bool,
+    pub dhcp: bool,
+    pub qos: bool,
+    pub cm_state: bool,
+    pub event_log: bool,
+    pub interfaces: bool,
+    pub product: bool,
+    pub service_flow_config: bool,
+    pub spectrum: Option<bool>,
+}
+
+impl ParseStatus {
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, bool)> + '_ {
+        [
+            ("status", self.status),
+            ("channels", self.channels),
+            ("version", self.version),
+            ("dhcp", self.dhcp),
+            ("qos", self.qos),
+            ("cm_state", self.cm_state),
+            ("event_log", self.event_log),
+            ("interfaces", self.interfaces),
+            ("product", self.product),
+            ("service_flow_config", self.service_flow_config),
+        ]
+        .into_iter()
+        .chain(self.spectrum.map(|ok| ("spectrum", ok)))
+    }
+}
+
+/// Returned when the modem responses are structurally valid HTTP but do not
+/// contain the fields the exporter requires. Carries the per-section status so
+/// callers can still expose which sections did parse.
+#[derive(Debug, Clone)]
+pub struct ParseFailure {
+    pub missing: Vec<&'static str>,
+    pub status: ParseStatus,
+}
+
+impl fmt::Display for ParseFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "essential modem fields missing or unparsable: {}",
+            self.missing.join(", ")
+        )
+    }
+}
+
+impl std::error::Error for ParseFailure {}
+
 #[derive(Debug, Clone)]
 pub struct ScrapedData {
     pub downstream_qam: Vec<DownstreamQam>,
@@ -167,6 +225,24 @@ pub struct ScrapedData {
     pub dhcp_state: String,
     pub service_flow_configs: Vec<ServiceFlowConfig>,
     pub scrape_duration_secs: f64,
+    pub parse_status: ParseStatus,
+}
+
+#[derive(Debug, Default)]
+struct ChannelData {
+    downstream_qam: Vec<DownstreamQam>,
+    downstream_ofdm: Vec<DownstreamOfdm>,
+    upstream_qam: Vec<UpstreamQam>,
+    upstream_ofdm: Vec<UpstreamOfdm>,
+}
+
+impl ChannelData {
+    fn is_empty(&self) -> bool {
+        self.downstream_qam.is_empty()
+            && self.downstream_ofdm.is_empty()
+            && self.upstream_qam.is_empty()
+            && self.upstream_ofdm.is_empty()
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -181,111 +257,218 @@ pub fn parse_all(
     product_html: &str,
     spectrum_html: Option<&str>,
     scrape_duration_secs: f64,
-) -> Result<ScrapedData> {
+) -> std::result::Result<ScrapedData, ParseFailure> {
+    let channels = parse_channels(status_html);
     let (cpe_static, cpe_dynamic) = parse_cpe_counts(status_html);
+    let uptime_seconds = parse_uptime(status_html);
+    let cm_status = parse_cm_status(status_html);
+    let version_info = parse_version_info(vers_html, status_html);
+    let dhcp_info = parse_dhcp_info(dhcp_html);
+    let dhcp_state = parse_dhcp_state(dhcp_html);
+    let qos_flows = parse_qos(qos_html);
+    let cm_state = parse_cm_state(cm_state_html);
+    let events = parse_event_log(event_html);
+    let interfaces = parse_interfaces(status_html);
+    let product_info = parse_product_info(status_html, product_html);
+    let spectrum = spectrum_html.map(parse_spectrum_chunks).unwrap_or_default();
+    let service_flow_configs = parse_service_flow_configs(config_params_html);
+
+    let parse_status = ParseStatus {
+        status: !cm_status.is_empty(),
+        channels: !channels.is_empty()
+            || (!cm_status.is_empty() && !cm_status.eq_ignore_ascii_case("OPERATIONAL")),
+        version: !version_info.model.is_empty(),
+        dhcp: !dhcp_state.is_empty() || !dhcp_info.cm_ip.is_empty(),
+        qos: !qos_flows.is_empty() || qos_html.contains("SFID"),
+        cm_state: !cm_state.overall_state.is_empty() || !cm_state.phases.is_empty(),
+        event_log: !events.is_empty() || event_html.contains("Event ID"),
+        interfaces: !interfaces.is_empty() || status_html.contains("Interface Parameters"),
+        product: !product_info.ethernet_phy_type.is_empty()
+            || !product_info.logging_components_enabled.is_empty(),
+        service_flow_config: !service_flow_configs.is_empty()
+            || config_params_html.contains("ServiceFlow"),
+        spectrum: spectrum_html.map(|html| html.contains("spectrum_data") && !spectrum.is_empty()),
+    };
+
+    let mut missing = Vec::new();
+    if !parse_status.status {
+        missing.push("status");
+    }
+    if !parse_status.version {
+        missing.push("version/model");
+    }
+    // A modem that is not operational legitimately has no bonded channels.
+    // When it claims to be operational, an empty channel set means the page
+    // structure changed or only part of the response was returned.
+    if cm_status.eq_ignore_ascii_case("OPERATIONAL") && !parse_status.channels {
+        missing.push("channels");
+    }
+    if !missing.is_empty() {
+        return Err(ParseFailure {
+            missing,
+            status: parse_status,
+        });
+    }
+
     Ok(ScrapedData {
-        downstream_qam: parse_downstream_qam(status_html),
-        downstream_ofdm: parse_downstream_ofdm(status_html),
-        upstream_qam: parse_upstream_qam(status_html),
-        upstream_ofdm: parse_upstream_ofdm(status_html),
-        uptime_seconds: parse_uptime(status_html),
-        cm_status: parse_cm_status(status_html),
-        version_info: parse_version_info(vers_html, status_html),
-        dhcp_info: parse_dhcp_info(dhcp_html),
-        dhcp_state: parse_dhcp_state(dhcp_html),
-        qos_flows: parse_qos(qos_html),
-        cm_state: parse_cm_state(cm_state_html),
-        events: parse_event_log(event_html),
-        interfaces: parse_interfaces(status_html),
-        product_info: parse_product_info(status_html, product_html),
-        spectrum: spectrum_html.map(parse_spectrum_chunks).unwrap_or_default(),
+        downstream_qam: channels.downstream_qam,
+        downstream_ofdm: channels.downstream_ofdm,
+        upstream_qam: channels.upstream_qam,
+        upstream_ofdm: channels.upstream_ofdm,
+        uptime_seconds,
+        cm_status,
+        version_info,
+        dhcp_info,
+        dhcp_state,
+        qos_flows,
+        cm_state,
+        events,
+        interfaces,
+        product_info,
+        spectrum,
         cpe_static,
         cpe_dynamic,
-        service_flow_configs: parse_service_flow_configs(config_params_html),
+        service_flow_configs,
         scrape_duration_secs,
+        parse_status,
     })
 }
 
-fn parse_downstream_qam(html: &str) -> Vec<DownstreamQam> {
-    let re = Regex::new(
-        r"Downstream\s+(\d+)</td><td>(\d+)</td><td>([\d.]+)\s*MHz</td><td>(-?[\d.]+)\s*dBmV</td><td>([\d.]+)\s*dB</td><td>(\d+QAM)</td><td>(\d+)</td><td>(\d+)</td><td>(\d+)"
-    ).unwrap();
-
-    re.captures_iter(html)
-        .filter_map(|c| {
-            Some(DownstreamQam {
-                channel: c[1].parse().ok()?,
-                dcid: c[2].parse().ok()?,
-                freq_mhz: c[3].parse().ok()?,
-                power_dbmv: c[4].parse().ok()?,
-                snr_db: c[5].parse().ok()?,
-                modulation: c[6].to_string(),
-                octets: c[7].parse().ok()?,
-                correcteds: c[8].parse().ok()?,
-                uncorrectables: c[9].parse().ok()?,
-            })
-        })
-        .collect()
+/// Parse channel rows through the HTML tree instead of matching raw markup.
+/// The modem's firmware emits the same cells with varying whitespace and
+/// attributes, which made the previous regular expressions brittle.
+fn parse_channels(html: &str) -> ChannelData {
+    let mut data = parse_channel_rows(html);
+    if data.is_empty() {
+        // Unit tests and callers may supply a bare <tr> fragment. HTML5
+        // parsing drops table rows that are not inside a table context.
+        let wrapped = format!("<table>{}</table>", html);
+        data = parse_channel_rows(&wrapped);
+    }
+    data
 }
 
-fn parse_downstream_ofdm(html: &str) -> Vec<DownstreamOfdm> {
-    let re = Regex::new(
-        r"Downstream\s+(\d+)</td><td>(\d+K)</td><td>([\d.]+)</td><td>(\d+)</td><td>([\d.]+)</td><td>([\d.]+)</td><td>([\d.]+)</td><td>([\d.]+)</td><td>([\d.]+)"
-    ).unwrap();
+fn parse_channel_rows(html: &str) -> ChannelData {
+    let document = Html::parse_document(html);
+    let Ok(row_selector) = Selector::parse("tr") else {
+        return ChannelData::default();
+    };
+    let Ok(cell_selector) = Selector::parse("td") else {
+        return ChannelData::default();
+    };
 
-    re.captures_iter(html)
-        .filter_map(|c| {
-            Some(DownstreamOfdm {
-                channel: c[1].parse().ok()?,
-                fft_type: c[2].to_string(),
-                channel_width_mhz: c[3].parse().ok()?,
-                active_subcarriers: c[4].parse().ok()?,
-                rxmer_pilot_db: c[7].parse().ok()?,
-                rxmer_plc_db: c[8].parse().ok()?,
-                rxmer_data_db: c[9].parse().ok()?,
-            })
-        })
-        .collect()
+    let mut data = ChannelData::default();
+    for row in document.select(&row_selector) {
+        let cells: Vec<String> = row
+            .select(&cell_selector)
+            .map(|cell| cell.text().collect::<String>().trim().to_string())
+            .collect();
+        if cells.len() < 2 {
+            continue;
+        }
+
+        if let Some(channel) = parse_downstream_row(&cells) {
+            data.downstream_qam.push(channel);
+        } else if let Some(channel) = parse_downstream_ofdm_row(&cells) {
+            data.downstream_ofdm.push(channel);
+        } else if let Some(channel) = parse_upstream_row(&cells) {
+            data.upstream_qam.push(channel);
+        } else if let Some(channel) = parse_upstream_ofdm_row(&cells) {
+            data.upstream_ofdm.push(channel);
+        }
+    }
+    data
 }
 
-fn parse_upstream_qam(html: &str) -> Vec<UpstreamQam> {
-    let re = Regex::new(
-        r"Upstream\s+(\d+)</td><td>(\d+)</td><td>([\d.]+)\s*MHz</td><td>([\d.]+)\s*dBmV</td><td>([^<]+)</td><td>([\d.]+)\s*kSym/s</td><td>(\d+QAM)"
-    ).unwrap();
-
-    re.captures_iter(html)
-        .filter_map(|c| {
-            Some(UpstreamQam {
-                channel: c[1].parse().ok()?,
-                ucid: c[2].parse().ok()?,
-                freq_mhz: c[3].parse().ok()?,
-                power_dbmv: c[4].parse().ok()?,
-                channel_type: c[5].trim().to_string(),
-                symbol_rate_ksym: c[6].parse().ok()?,
-                modulation: c[7].to_string(),
-            })
-        })
-        .collect()
+fn channel_number(cell: &str, direction: &str) -> Option<u32> {
+    let rest = cell.strip_prefix(direction)?.trim();
+    rest.parse().ok()
 }
 
-fn parse_upstream_ofdm(html: &str) -> Vec<UpstreamOfdm> {
-    let re = Regex::new(
-        r"Upstream\s+(\d+)</td><td>(\d+K)</td><td>([\d.]+)</td><td>(\d+)</td><td>([\d.]+)</td><td>([\d.]+)</td><td>(-?[\d.]+)</td><td>(-?[\d.]+)</td><td>(-?[\d.]+)"
-    ).unwrap();
+fn parse_downstream_row(cells: &[String]) -> Option<DownstreamQam> {
+    if cells.len() < 9 {
+        return None;
+    }
+    let channel = channel_number(&cells[0], "Downstream")?;
+    // OFDM rows use a channel width such as "4K" in this position.
+    if !cells[1].chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    if !cells[2].ends_with("MHz") || cells[5].len() < 3 {
+        return None;
+    }
+    Some(DownstreamQam {
+        channel,
+        dcid: cells[1].parse().ok()?,
+        freq_mhz: number_with_unit(&cells[2], "MHz")?,
+        power_dbmv: number_with_unit(&cells[3], "dBmV")?,
+        snr_db: number_with_unit(&cells[4], "dB")?,
+        modulation: cells[5].clone(),
+        octets: cells[6].parse().ok()?,
+        correcteds: cells[7].parse().ok()?,
+        uncorrectables: cells[8].parse().ok()?,
+    })
+}
 
-    re.captures_iter(html)
-        .filter_map(|c| {
-            Some(UpstreamOfdm {
-                channel: c[1].parse().ok()?,
-                fft_type: c[2].to_string(),
-                channel_width_mhz: c[3].parse().ok()?,
-                active_subcarriers: c[4].parse().ok()?,
-                first_active_subcarrier_mhz: c[5].parse().ok()?,
-                last_active_subcarrier_mhz: c[6].parse().ok()?,
-                tx_power_dbmv: c[9].parse().ok()?,
-            })
-        })
-        .collect()
+fn parse_downstream_ofdm_row(cells: &[String]) -> Option<DownstreamOfdm> {
+    if cells.len() < 9 {
+        return None;
+    }
+    let channel = channel_number(&cells[0], "Downstream")?;
+    if !cells[1].ends_with('K') {
+        return None;
+    }
+    Some(DownstreamOfdm {
+        channel,
+        fft_type: cells[1].clone(),
+        channel_width_mhz: cells[2].parse().ok()?,
+        active_subcarriers: cells[3].parse().ok()?,
+        rxmer_pilot_db: cells[6].parse().ok()?,
+        rxmer_plc_db: cells[7].parse().ok()?,
+        rxmer_data_db: cells[8].parse().ok()?,
+    })
+}
+
+fn parse_upstream_row(cells: &[String]) -> Option<UpstreamQam> {
+    if cells.len() < 7 {
+        return None;
+    }
+    let channel = channel_number(&cells[0], "Upstream")?;
+    if !cells[1].chars().all(|c| c.is_ascii_digit()) || !cells[5].contains("kSym/s") {
+        return None;
+    }
+    Some(UpstreamQam {
+        channel,
+        ucid: cells[1].parse().ok()?,
+        freq_mhz: number_with_unit(&cells[2], "MHz")?,
+        power_dbmv: number_with_unit(&cells[3], "dBmV")?,
+        channel_type: cells[4].clone(),
+        symbol_rate_ksym: number_with_unit(&cells[5], "kSym/s")?,
+        modulation: cells[6].clone(),
+    })
+}
+
+fn parse_upstream_ofdm_row(cells: &[String]) -> Option<UpstreamOfdm> {
+    if cells.len() < 9 {
+        return None;
+    }
+    let channel = channel_number(&cells[0], "Upstream")?;
+    if !cells[1].ends_with('K') {
+        return None;
+    }
+    Some(UpstreamOfdm {
+        channel,
+        fft_type: cells[1].clone(),
+        channel_width_mhz: cells[2].parse().ok()?,
+        active_subcarriers: cells[3].parse().ok()?,
+        first_active_subcarrier_mhz: cells[4].parse().ok()?,
+        last_active_subcarrier_mhz: cells[5].parse().ok()?,
+        tx_power_dbmv: cells[8].parse().ok()?,
+    })
+}
+
+fn number_with_unit(cell: &str, unit: &str) -> Option<f64> {
+    cell.trim().strip_suffix(unit)?.trim().parse().ok()
 }
 
 fn parse_uptime(html: &str) -> Option<u64> {
@@ -697,10 +880,32 @@ mod tests {
     #[test]
     fn test_parse_downstream_qam() {
         let html = r#"<tr><td>Downstream 1</td><td>3</td><td>570.00 MHz</td><td>2.20 dBmV</td><td>40.37 dB</td><td>256QAM</td><td>2858</td><td>12</td><td>0</td></tr>"#;
-        let channels = parse_downstream_qam(html);
+        let channels = parse_channels(html).downstream_qam;
         assert_eq!(channels.len(), 1);
         assert_eq!(channels[0].dcid, 3);
         assert!((channels[0].power_dbmv - 2.20).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_channel_rows_tolerate_attributes_and_whitespace() {
+        let html = r#"
+            <table>
+              <tr class="channel">
+                <td data-label="channel"> Downstream  1 </td>
+                <td data-label="dcid">3</td>
+                <td>  570.00 MHz </td>
+                <td> 2.20 dBmV </td>
+                <td> 40.37 dB </td>
+                <td> 256QAM </td>
+                <td>2858</td><td>12</td><td>0</td>
+              </tr>
+              <tr><td>Downstream 1</td><td>4K</td><td>190</td><td>3800</td><td>135</td><td>324</td><td>49</td><td>43</td><td>43</td></tr>
+            </table>
+        "#;
+        let channels = parse_channels(html);
+        assert_eq!(channels.downstream_qam.len(), 1);
+        assert_eq!(channels.downstream_ofdm.len(), 1);
+        assert!((channels.downstream_qam[0].freq_mhz - 570.0).abs() < 0.01);
     }
 
     #[test]
@@ -712,7 +917,7 @@ mod tests {
     #[test]
     fn test_parse_negative_power() {
         let html = r#"<tr><td>Downstream 17</td><td>18</td><td>698.00 MHz</td><td>-2.50 dBmV</td><td>36.34 dB</td><td>64QAM</td><td>370</td><td>11</td><td>0</td></tr>"#;
-        let channels = parse_downstream_qam(html);
+        let channels = parse_channels(html).downstream_qam;
         assert_eq!(channels.len(), 1);
         assert!((channels[0].power_dbmv - (-2.50)).abs() < 0.01);
     }
@@ -776,7 +981,7 @@ mod tests {
     #[test]
     fn test_parse_upstream_ofdm_uses_last_numeric_field_as_power() {
         let html = r#"<tr><td>Upstream 0</td><td>2K</td><td>32.000000</td><td>640</td><td>74</td><td>773</td><td>29.8</td><td>64.8</td><td>37.000000</td></tr>"#;
-        let channels = parse_upstream_ofdm(html);
+        let channels = parse_channels(html).upstream_ofdm;
         assert_eq!(channels.len(), 1);
         assert!((channels[0].tx_power_dbmv - 37.0).abs() < 0.01);
         assert!((channels[0].first_active_subcarrier_mhz - 74.0).abs() < 0.01);
@@ -792,5 +997,70 @@ mod tests {
         assert_eq!(parsed.bin_spacing_hz, 117187);
         assert_eq!(parsed.resolution_bandwidth, 1);
         assert_eq!(parsed.bins_raw_tenth_dbmv.len(), 4);
+    }
+
+    fn valid_status() -> &'static str {
+        r#"
+        <table>
+          <tr><td>CM Status:</td><td>OPERATIONAL</td></tr>
+          <tr><td>Downstream 1</td><td>3</td><td>570.00 MHz</td><td>2.20 dBmV</td><td>40.37 dB</td><td>256QAM</td><td>2858</td><td>12</td><td>0</td></tr>
+        </table>
+        "#
+    }
+
+    fn valid_versions() -> &'static str {
+        r#"MODEL: CM3500B<br>SW_REV: TS11.05.042.02"#
+    }
+
+    #[test]
+    fn parse_all_accepts_a_valid_minimal_scrape() {
+        let data = parse_all(
+            valid_status(),
+            valid_versions(),
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            None,
+            0.1,
+        )
+        .expect("valid status and version should parse");
+        assert_eq!(data.cm_status, "OPERATIONAL");
+        assert_eq!(data.version_info.model, "CM3500B");
+        assert_eq!(data.downstream_qam.len(), 1);
+        assert!(data.parse_status.status);
+        assert!(data.parse_status.channels);
+        assert!(data.parse_status.version);
+        assert!(!data.parse_status.dhcp);
+    }
+
+    #[test]
+    fn parse_all_rejects_empty_pages() {
+        let err = parse_all("", "", "", "", "", "", "", "", None, 0.1).unwrap_err();
+        assert!(err.missing.contains(&"status"));
+        assert!(err.missing.contains(&"version/model"));
+        assert!(!err.status.status);
+        assert!(!err.status.version);
+    }
+
+    #[test]
+    fn parse_all_rejects_operational_modem_without_channels() {
+        let status = r#"<td>CM Status:</td><td>OPERATIONAL</td>"#;
+        let err =
+            parse_all(status, valid_versions(), "", "", "", "", "", "", None, 0.1).unwrap_err();
+        assert_eq!(err.missing, vec!["channels"]);
+        assert!(!err.status.channels);
+    }
+
+    #[test]
+    fn parse_all_allows_non_operational_modem_without_channels() {
+        let status = r#"<td>CM Status:</td><td>Not Ready</td>"#;
+        let data = parse_all(status, valid_versions(), "", "", "", "", "", "", None, 0.1)
+            .expect("a non-operational modem may have no bonded channels");
+        assert_eq!(data.cm_status, "Not Ready");
+        assert!(data.downstream_qam.is_empty());
+        assert!(data.parse_status.channels);
     }
 }

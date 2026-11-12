@@ -10,7 +10,8 @@ COPY . .
 RUN nix build . --no-link --print-out-paths > /out-path
 RUN store_path=$(cat /out-path) && cp ${store_path}/bin/cm3500-b-ce-exporter /cm3500-b-ce-exporter
 
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian12:nonroot
 COPY --from=builder /cm3500-b-ce-exporter /cm3500-b-ce-exporter
 EXPOSE 10044
+USER nonroot:nonroot
 ENTRYPOINT ["/cm3500-b-ce-exporter"]

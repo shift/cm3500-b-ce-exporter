@@ -12,19 +12,30 @@ Licensed under [AGPL-3.0-or-later](LICENSE).
 
 ```bash
 nix develop --command bash -c "cargo build --release"
-./target/release/cm3500-b-ce-exporter --password YOUR_PASSWORD
+./target/release/cm3500-b-ce-exporter --password YOUR_PASSWORD --insecure-tls
 ```
+
+The CM3500B uses a self-signed certificate and does not provide certificate
+management, so `--insecure-tls` is normally required for HTTPS. If you have
+installed a trusted certificate or a local CA, omit `--insecure-tls` and pass
+`--ca-cert /path/to/ca.pem` instead.
 
 ### Docker Compose (full stack)
 
 ```bash
-MODEM_PASSWORD=YOUR_PASSWORD docker compose up -d
+cp .env.example .env
+# edit .env and set MODEM_PASSWORD and GRAFANA_ADMIN_PASSWORD
+docker compose up -d
 ```
 
 This starts the exporter, Prometheus, and Grafana with the dashboard pre-loaded:
-- Exporter: http://localhost:10044/metrics
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/admin)
+- Exporter metrics are internal to the Compose network (not published)
+- Prometheus: http://127.0.0.1:9090
+- Grafana: http://127.0.0.1:3000
+
+The exporter endpoint contains modem serial numbers, interface MAC addresses,
+and network state. Treat `/metrics` as sensitive internal telemetry and do not
+publish it beyond a trusted monitoring network.
 
 ### Binary
 
@@ -35,9 +46,17 @@ Options:
   --modem-url <URL>         Modem base URL [default: https://192.168.100.1]
   --username <USER>         Login username [default: admin]
   --password <PASS>         Login password (required)
-  --listen <ADDR>              Listen address [default: 0.0.0.0:10044]
+  --listen <ADDR>              Listen address [default: 127.0.0.1:10044]
   --disable-prometheus         Disable the Prometheus /metrics HTTP endpoint entirely
   --interval <SECONDS>         Scrape interval [default: 30]
+  --connect-timeout <SECONDS>  TCP connection timeout [default: 5]
+  --request-timeout <SECONDS>  Total HTTP request timeout [default: 15]
+  --insecure-tls               Accept the modem's self-signed/invalid TLS certificate
+  --ca-cert <PATH>             PEM CA certificate to trust instead of --insecure-tls
+  --debug-html-dir <DIR>       Write redacted modem HTML on structural parse failure
+  --readiness-stale-after <SECONDS>
+                                Fail /ready after this long without a successful scrape
+                                [default: max(60, 3 × interval)]
   --state-file <PATH>          Write connection state changes to this JSON file
   --capacity-file <PATH>       Write configured upstream/downstream capacity to this JSON file
   --state-down-threshold <N>   Consecutive bad scrapes/states before reporting down [default: 3]
@@ -119,9 +138,23 @@ Example:
   "shaped_upstream_bps": 121600000,
   "shaped_downstream_bps": 1070080000,
   "source": "service_flow_config",
+  "basis": "max_individual_service_flow_rate",
+  "margin_percent": 95,
   "valid": true
 }
 ```
+
+Capacity semantics:
+
+- `upstream_bps` / `downstream_bps` are the highest individual provisioned
+  `SfMaxTrafficRate` across the service flows in that direction. They are not an
+  aggregate across flows and are not measured throughput.
+- `shaped_*_bps` apply `--capacity-margin-percent` to those provisioned rates.
+  They are an operational estimate of usable capacity, not a measurement.
+- DOCSIS service-flow configurations can contain multiple flows per direction;
+  the current basis deliberately takes the largest individual flow. Verify that
+  assumption against your provider's configuration before using these values for
+  shaping decisions.
 
 Files are written atomically and only rewritten when their semantic content changes, making them suitable for `systemd.path` or other file-watch based automation.
 
@@ -133,7 +166,43 @@ When `--enable-spectrum` is set, the exporter performs an active modem spectrum 
 
 ## Scraping Model
 
-The exporter scrapes the modem on a background interval (default: 30s) and serves the last successful result from `/metrics`. This avoids doing a full modem login and multi-page fetch on every Prometheus scrape and keeps scrape latency predictable despite the modem's cookie-based session handling.
+The exporter scrapes the modem on a background interval (default: 30s) and serves the last scrape result from `/metrics`. This avoids doing a full modem login and multi-page fetch on every Prometheus scrape and keeps scrape latency predictable despite the modem's cookie-based session handling.
+
+A scrape is only considered successful if the required page fields parse:
+
+- the status page yields a CM status and at least one downstream channel when the
+  modem reports `OPERATIONAL`;
+- the version page yields a model.
+
+If an expected field is missing, `/metrics` reports `cm3500_up 0`,
+`cm3500_parse_success 0`, and the relevant
+`cm3500_section_parse_success{section="..."}` indicator. This prevents a
+firmware change or truncated page from looking like a healthy scrape with empty
+channel metrics.
+
+## Health and Readiness
+
+- `/health` is a liveness check and returns `200 OK` whenever the process is
+  running.
+- `/ready` returns `200` only if a scrape has completed successfully within the
+  staleness window (`--readiness-stale-after`, or `max(60, 3 × interval)` by
+  default). Otherwise it returns `503` with the age of the last success and the
+  most recent error.
+- `/metrics` always serves the most recent result, successful or not.
+
+Use `/ready` for container orchestration and external alerting; use `/health`
+only to detect a dead process.
+
+## Debugging Failed Parses
+
+Set `--debug-html-dir /var/lib/cm3500/debug` to preserve the modem responses
+when an essential field fails to parse. Each failure creates a timestamped
+directory containing the raw pages and `parse-error.txt`.
+
+Debug bundles use `0700` directories and `0600` files. Token-like values
+(`csrf_token`, passwords, session/token fields) are redacted, but the pages
+still contain modem serial numbers, MAC addresses, and network details. Protect
+and rotate these files accordingly.
 
 ## Metrics Exposed
 
@@ -141,7 +210,9 @@ The exporter scrapes the modem on a background interval (default: 30s) and serve
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `cm3500_up` | gauge | Whether the modem scrape was successful |
+| `cm3500_up` | gauge | Whether the complete fetch-and-parse scrape was successful |
+| `cm3500_parse_success` | gauge | Whether the required modem page fields parsed |
+| `cm3500_section_parse_success` | gauge | Per-section parse status (label: `section`) |
 | `cm3500_scrape_duration_seconds` | gauge | Duration of the last scrape |
 | `cm3500_info` | gauge | Modem hardware/firmware info (labels: model, serial, firmware, etc.) |
 | `cm3500_uptime_seconds` | gauge | System uptime in seconds |
@@ -237,6 +308,8 @@ The exporter scrapes the modem on a background interval (default: 30s) and serve
 | `cm3500_qos_min_reserved_rate_kbps` | gauge | direction, flow_index | Minimum reserved rate from config |
 | `cm3500_qos_max_traffic_burst` | gauge | direction, flow_index | Maximum traffic burst from config |
 | `cm3500_qos_traffic_priority` | gauge | direction, flow_index | Traffic priority from config |
+| `cm3500_capacity_provisioned_bps` | gauge | direction, basis | Highest individual provisioned flow rate (not aggregate or measured) |
+| `cm3500_capacity_estimated_bps` | gauge | direction, basis, margin_percent | Provisioned rate multiplied by the configured margin (an estimate) |
 
 ### Key Event IDs
 
