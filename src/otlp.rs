@@ -1,4 +1,4 @@
-use crate::parser::{EventLogEntry, ScrapedData};
+use crate::parser::{DhcpLogEntry, EventLogEntry, ScrapedData};
 use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde_json::{json, Map, Value};
@@ -141,6 +141,7 @@ impl OtlpClient {
                     vec![
                         str_attr("network.interface.name", &iface.name),
                         str_attr("network.interface.provisioned", &iface.provisioned),
+                        str_attr("network.interface.speed_mbps", &iface.speed_mbps),
                     ],
                     now,
                 )],
@@ -201,6 +202,118 @@ impl OtlpClient {
         ] {
             if let Some(v) = opt_val {
                 metrics.push(gauge(name, desc, "s", vec![f64_dp(v as f64, vec![], now)]));
+            }
+        }
+        for (name, desc, opt_val) in [
+            (
+                "hw.cable_modem.provisioning.dhcp.rebind.duration",
+                "Total DHCP rebind duration",
+                data.dhcp_info.rebind_total_secs,
+            ),
+            (
+                "hw.cable_modem.provisioning.dhcp.renew.duration",
+                "Total DHCP renew duration",
+                data.dhcp_info.renew_total_secs,
+            ),
+        ] {
+            if let Some(v) = opt_val {
+                metrics.push(gauge(name, desc, "s", vec![f64_dp(v as f64, vec![], now)]));
+            }
+        }
+        if let Some(v) = data.dhcp_info.time_offset_seconds {
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.time_offset",
+                "DHCP time offset",
+                "s",
+                vec![f64_dp(v as f64, vec![], now)],
+            ));
+        }
+        if let Some(v) = data.dhcp_info.mdd_ip_override {
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.mdd_ip_override",
+                "MDD IP override value",
+                "1",
+                vec![f64_dp(v as f64, vec![], now)],
+            ));
+        }
+        if let Some(v) = data.dhcp_info.mdd_ip_override_enabled {
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.mdd_ip_override_enabled",
+                "Whether the MDD IP override is enabled",
+                "1",
+                vec![f64_dp(if v { 1.0 } else { 0.0 }, vec![], now)],
+            ));
+        }
+        if let Some(v) = data.dhcp_info.mdd_ip_mode {
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.mdd_ip_mode",
+                "MDD IP mode",
+                "1",
+                vec![f64_dp(
+                    v as f64,
+                    vec![str_attr(
+                        "dhcp.mdd_ip_mode_name",
+                        &data.dhcp_info.mdd_ip_mode_name,
+                    )],
+                    now,
+                )],
+            ));
+        }
+        for (key, value) in [
+            (
+                "hw.cable_modem.provisioning.dhcp.cm_ip.info",
+                &data.dhcp_info.cm_ip,
+            ),
+            (
+                "hw.cable_modem.provisioning.dhcp.subnet.info",
+                &data.dhcp_info.cm_subnet,
+            ),
+            (
+                "hw.cable_modem.provisioning.dhcp.gateway.info",
+                &data.dhcp_info.cm_gateway,
+            ),
+            (
+                "hw.cable_modem.provisioning.dhcp.tftp_server.info",
+                &data.dhcp_info.tftp_server,
+            ),
+            (
+                "hw.cable_modem.provisioning.dhcp.time_server.info",
+                &data.dhcp_info.time_server,
+            ),
+            (
+                "hw.cable_modem.provisioning.dhcp.boot_file.info",
+                &data.dhcp_info.boot_file,
+            ),
+            (
+                "hw.cable_modem.provisioning.software_filename.info",
+                &data.dhcp_info.software_filename,
+            ),
+        ] {
+            if value.is_empty() {
+                continue;
+            }
+            metrics.push(gauge(
+                key,
+                "DHCP provisioning detail",
+                "1",
+                vec![f64_dp(1.0, vec![str_attr("value", value)], now)],
+            ));
+        }
+        for (family, attempts) in [
+            ("ipv4", data.cm_state.dhcp_ipv4_attempts),
+            ("ipv6", data.cm_state.dhcp_ipv6_attempts),
+        ] {
+            if let Some(value) = attempts {
+                metrics.push(gauge(
+                    "hw.cable_modem.provisioning.dhcp.attempts",
+                    "Number of DHCP attempts to obtain a CM IP address",
+                    "1",
+                    vec![f64_dp(
+                        value as f64,
+                        vec![str_attr("dhcp.family", family)],
+                        now,
+                    )],
+                ));
             }
         }
 
@@ -650,6 +763,52 @@ impl OtlpClient {
                 dps,
             ));
         }
+        if !data.product_info.logging_components.is_empty() {
+            let dps = data
+                .product_info
+                .logging_components
+                .iter()
+                .map(|component| {
+                    f64_dp(
+                        if component.enabled { 1.0 } else { 0.0 },
+                        vec![
+                            int_attr("cm3500.logging.component.index", component.index as i64),
+                            str_attr("cm3500.logging.component", &component.name),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.product.logging_component.enabled",
+                "Per-component internal logging state",
+                "1",
+                dps,
+            ));
+        }
+        if !data.product_info.severity_levels.is_empty() {
+            let dps = data
+                .product_info
+                .severity_levels
+                .iter()
+                .map(|level| {
+                    f64_dp(
+                        if level.enabled { 1.0 } else { 0.0 },
+                        vec![
+                            int_attr("cm3500.logging.severity.index", level.index as i64),
+                            str_attr("cm3500.logging.severity", &level.name),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.product.severity_level.enabled",
+                "Per-severity logging state",
+                "1",
+                dps,
+            ));
+        }
         if !data.spectrum.is_empty() {
             metrics.push(gauge(
                 "hw.cable_modem.spectrum.chunks",
@@ -730,13 +889,116 @@ impl OtlpClient {
             ));
         }
 
+        metrics.push(gauge(
+            "hw.cable_modem.product.info",
+            "Static modem product and status information",
+            "1",
+            vec![f64_dp(
+                1.0,
+                vec![
+                    str_attr("cm3500.status.time", &data.status_info.time_and_date),
+                    str_attr("cm3500.product.type", &data.status_info.product_type),
+                    str_attr("cm3500.hardware.info", &data.status_info.hardware_info),
+                    str_attr("cm3500.version.system", &data.version_info.system),
+                    str_attr(
+                        "cm3500.product.router",
+                        bool_label(data.status_info.router_enabled),
+                    ),
+                    str_attr(
+                        "cm3500.product.telemetry",
+                        bool_label(data.status_info.telemetry_enabled),
+                    ),
+                    str_attr("cm3500.product.rf_hw", &data.status_info.rf_hw),
+                    str_attr("cm3500.product.market", &data.status_info.market),
+                ],
+                now,
+            )],
+        ));
+
+        for (index, id) in data
+            .status_info
+            .l2vpn_attachment_circuit_ids
+            .iter()
+            .enumerate()
+        {
+            metrics.push(gauge(
+                "hw.cable_modem.l2vpn.attachment_circuit.info",
+                "L2VPN attachment circuit identifier",
+                "1",
+                vec![f64_dp(
+                    1.0,
+                    vec![
+                        int_attr("cm3500.l2vpn.index", index as i64 + 1),
+                        str_attr("cm3500.l2vpn.id", id),
+                    ],
+                    now,
+                )],
+            ));
+        }
+
+        if !data.diplexer_bands.is_empty() {
+            let points = data
+                .diplexer_bands
+                .iter()
+                .map(|band| {
+                    f64_dp(
+                        1.0,
+                        vec![
+                            int_attr("cm3500.diplexer.band", band.band as i64),
+                            str_attr("cm3500.diplexer.upstream_range", &band.upstream_range),
+                            str_attr("cm3500.diplexer.downstream_range", &band.downstream_range),
+                            str_attr("cm3500.diplexer.current", &band.current.to_string()),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.diplexer.band.info",
+                "Diplexer band ranges and current band setting",
+                "1",
+                points,
+            ));
+        }
+
+        if !data.downstream_ofdm.is_empty() {
+            let points = data
+                .downstream_ofdm
+                .iter()
+                .map(|ch| {
+                    f64_dp(
+                        1.0,
+                        vec![
+                            int_attr("cable.channel.id", ch.channel as i64),
+                            str_attr("cable.ofdm.fft_type", &ch.fft_type),
+                            str_attr(
+                                "cable.ofdm.active_subcarrier.first_mhz",
+                                &ch.first_active_subcarrier_mhz.to_string(),
+                            ),
+                            str_attr(
+                                "cable.ofdm.active_subcarrier.last_mhz",
+                                &ch.last_active_subcarrier_mhz.to_string(),
+                            ),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.downstream.ofdm.subcarrier.range",
+                "First and last active downstream OFDM subcarrier",
+                "MHz",
+                points,
+            ));
+        }
+
         if !data.service_flow_configs.is_empty() {
             let max_rate: Vec<Value> = data
                 .service_flow_configs
                 .iter()
                 .map(|f| {
                     f64_dp(
-                        f.max_traffic_rate_kbps as f64 * 1000.0,
+                        f.max_traffic_rate_bps as f64,
                         vec![
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
@@ -750,7 +1012,7 @@ impl OtlpClient {
                 .iter()
                 .map(|f| {
                     f64_dp(
-                        f.min_reserved_rate_kbps as f64 * 1000.0,
+                        f.min_reserved_rate_bps as f64,
                         vec![
                             str_attr("cable.qos.direction", &f.direction),
                             int_attr("cable.qos.flow_index", f.index as i64),
@@ -811,7 +1073,240 @@ impl OtlpClient {
                 "1",
                 priority,
             ));
+
+            let info = data
+                .service_flow_configs
+                .iter()
+                .map(|f| {
+                    f64_dp(
+                        1.0,
+                        vec![
+                            str_attr("cable.qos.direction", &f.direction),
+                            int_attr("cable.qos.flow_index", f.index as i64),
+                            int_attr("cable.qos.reference", f.reference as i64),
+                            int_attr("cable.qos.sf_id", f.sf_id.unwrap_or(0) as i64),
+                            str_attr("cable.qos.class_name", &f.service_class),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.qos.service_flow.info",
+                "Service-flow identity and class information",
+                "1",
+                info,
+            ));
+
+            for (name, desc, values) in [
+                (
+                    "hw.cable_modem.qos.set_type",
+                    "QoS parameter set type",
+                    data.service_flow_configs
+                        .iter()
+                        .map(|f| f.qos_set_type as f64)
+                        .collect::<Vec<_>>(),
+                ),
+                (
+                    "hw.cable_modem.qos.min_reserved.pktsize",
+                    "Minimum reserved rate packet size",
+                    data.service_flow_configs
+                        .iter()
+                        .map(|f| f.min_reserved_rate_pktsize as f64)
+                        .collect::<Vec<_>>(),
+                ),
+                (
+                    "hw.cable_modem.qos.active_timeout",
+                    "Active QoS timeout",
+                    data.service_flow_configs
+                        .iter()
+                        .map(|f| f.active_qos_timeout as f64)
+                        .collect::<Vec<_>>(),
+                ),
+                (
+                    "hw.cable_modem.qos.admitted_timeout",
+                    "Admitted QoS timeout",
+                    data.service_flow_configs
+                        .iter()
+                        .map(|f| f.admitted_qos_timeout as f64)
+                        .collect::<Vec<_>>(),
+                ),
+                (
+                    "hw.cable_modem.qos.max_concat_burst",
+                    "Maximum concatenated burst",
+                    data.service_flow_configs
+                        .iter()
+                        .map(|f| f.max_concat_burst as f64)
+                        .collect::<Vec<_>>(),
+                ),
+            ] {
+                let dps = data
+                    .service_flow_configs
+                    .iter()
+                    .zip(values)
+                    .map(|(f, value)| {
+                        f64_dp(
+                            value,
+                            vec![
+                                str_attr("cable.qos.direction", &f.direction),
+                                int_attr("cable.qos.flow_index", f.index as i64),
+                            ],
+                            now,
+                        )
+                    })
+                    .collect();
+                metrics.push(gauge(name, desc, "1", dps));
+            }
         }
+
+        if !data.packet_classifications.is_empty() {
+            let dps = data
+                .packet_classifications
+                .iter()
+                .map(|pc| {
+                    f64_dp(
+                        1.0,
+                        vec![
+                            str_attr("cable.qos.direction", &pc.direction),
+                            int_attr("cable.qos.pc.index", pc.index as i64),
+                            int_attr("cable.qos.pc.service_flow", pc.service_flow as i64),
+                            int_attr("cable.qos.pc.identifier", pc.identifier as i64),
+                            int_attr("cable.qos.pc.rule_priority", pc.rule_priority as i64),
+                            int_attr("cable.qos.pc.activation_state", pc.activation_state as i64),
+                            int_attr("cable.qos.pc.ip_protocol", pc.ip_protocol as i64),
+                            int_attr(
+                                "cable.qos.pc.source_port_start",
+                                pc.source_port_start.unwrap_or(0) as i64,
+                            ),
+                            int_attr(
+                                "cable.qos.pc.source_port_end",
+                                pc.source_port_end.unwrap_or(0) as i64,
+                            ),
+                            int_attr(
+                                "cable.qos.pc.dest_port_start",
+                                pc.dest_port_start.unwrap_or(0) as i64,
+                            ),
+                            int_attr(
+                                "cable.qos.pc.dest_port_end",
+                                pc.dest_port_end.unwrap_or(0) as i64,
+                            ),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.qos.packet_classification.info",
+                "Packet classification rules",
+                "1",
+                dps,
+            ));
+        }
+
+        if !data.common_config.config_file.is_empty() {
+            metrics.push(gauge(
+                "hw.cable_modem.config.file.info",
+                "Configuration file URL",
+                "1",
+                vec![f64_dp(
+                    1.0,
+                    vec![str_attr("value", &data.common_config.config_file)],
+                    now,
+                )],
+            ));
+        }
+        if let Some(v) = data.common_config.max_cpe_allowed {
+            metrics.push(gauge(
+                "hw.cable_modem.config.max_cpe_allowed",
+                "Maximum CPE devices allowed",
+                "1",
+                vec![f64_dp(v as f64, vec![], now)],
+            ));
+        }
+        if let Some(v) = data.common_config.privacy_enable {
+            metrics.push(gauge(
+                "hw.cable_modem.config.privacy_enable",
+                "Privacy enable setting",
+                "1",
+                vec![f64_dp(v as f64, vec![], now)],
+            ));
+        }
+        if let Some(v) = data.common_config.network_access {
+            metrics.push(gauge(
+                "hw.cable_modem.config.network_access",
+                "Whether network access is enabled",
+                "1",
+                vec![f64_dp(if v { 1.0 } else { 0.0 }, vec![], now)],
+            ));
+        }
+
+        if !data.dhcp_log.is_empty() {
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.log.entries",
+                "Number of DHCPv6 log entries",
+                "1",
+                vec![f64_dp(data.dhcp_log.len() as f64, vec![], now)],
+            ));
+            let mut type_counts: std::collections::HashMap<&str, u32> =
+                std::collections::HashMap::new();
+            for entry in &data.dhcp_log {
+                *type_counts.entry(&entry.message_type).or_insert(0) += 1;
+            }
+            let dps = type_counts
+                .into_iter()
+                .map(|(message_type, count)| {
+                    f64_dp(
+                        count as f64,
+                        vec![str_attr("dhcp.message_type", message_type)],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.log.message_type.entries",
+                "DHCPv6 log entry count by message type",
+                "1",
+                dps,
+            ));
+            let dps = data
+                .dhcp_log
+                .iter()
+                .map(|entry| {
+                    f64_dp(
+                        1.0,
+                        vec![
+                            int_attr("dhcp.log.index", entry.index as i64),
+                            str_attr("dhcp.log.timestamp", &entry.timestamp),
+                            str_attr("dhcp.log.interface", &entry.interface),
+                            str_attr("dhcp.log.message_type", &entry.message_type),
+                            str_attr("dhcp.log.stateful_addr", &entry.stateful_addr),
+                            int_attr(
+                                "dhcp.log.preferred_lifetime",
+                                entry.preferred_lifetime.unwrap_or(0) as i64,
+                            ),
+                            int_attr(
+                                "dhcp.log.valid_lifetime",
+                                entry.valid_lifetime.unwrap_or(0) as i64,
+                            ),
+                        ],
+                        now,
+                    )
+                })
+                .collect();
+            metrics.push(gauge(
+                "hw.cable_modem.provisioning.dhcp.log.entry.info",
+                "DHCPv6 log entry details",
+                "1",
+                dps,
+            ));
+        }
+
+        metrics.push(gauge(
+            "hw.cable_modem.dsx.log.entries",
+            "Number of DSX message log entries",
+            "1",
+            vec![f64_dp(data.dsx_log.len() as f64, vec![], now)],
+        ));
 
         json!({
             "resourceMetrics": [{
@@ -836,7 +1331,8 @@ impl OtlpClient {
     }
 
     fn build_logs_body(&self, data: &ScrapedData, now: &str) -> Option<Value> {
-        let records = self.new_log_records(&data.events, now);
+        let mut records = self.new_log_records(&data.events, now);
+        records.extend(self.new_dhcp_log_records(&data.dhcp_log, now));
         if records.is_empty() {
             return None;
         }
@@ -891,6 +1387,92 @@ impl OtlpClient {
                 "severityNumber": severity_number,
                 "severityText": severity_text,
                 "body": { "stringValue": event.description },
+                "attributes": attrs,
+            }));
+
+            sent.push_back(key);
+            while sent.len() > 256 {
+                sent.pop_front();
+            }
+        }
+
+        records
+    }
+
+    fn new_dhcp_log_records(&self, entries: &[DhcpLogEntry], now: &str) -> Vec<Value> {
+        let mut sent = self.sent_event_keys.lock().unwrap();
+        let mut records = Vec::new();
+
+        for entry in entries {
+            let key = format!(
+                "dhcp|{}|{}|{}|{}",
+                entry.index, entry.timestamp, entry.message_type, entry.stateful_addr
+            );
+            if sent.iter().any(|existing| existing == &key) {
+                continue;
+            }
+
+            let options = entry
+                .options
+                .iter()
+                .map(|(id, name)| format!("{}:{}", id, name))
+                .collect::<Vec<_>>()
+                .join(",");
+            let mut attrs = vec![
+                str_attr("event.name", "cable_modem.dhcp_log"),
+                str_attr("event.domain", "cable_modem"),
+                int_attr("cable_modem.dhcp.log.index", entry.index as i64),
+                str_attr("cable_modem.dhcp.log.timestamp", &entry.timestamp),
+                str_attr("cable_modem.dhcp.log.interface", &entry.interface),
+                str_attr("cable_modem.dhcp.log.message_type", &entry.message_type),
+                str_attr("cable_modem.dhcp.log.client_id", &entry.client_id),
+                str_attr("cable_modem.dhcp.log.server_id", &entry.server_id),
+                str_attr("cable_modem.dhcp.log.stateful_addr", &entry.stateful_addr),
+                str_attr("cable_modem.dhcp.log.options", &options),
+            ];
+            if let Some(value) = entry.preference {
+                attrs.push(int_attr("cable_modem.dhcp.log.preference", value as i64));
+            }
+            if let Some(value) = entry.ia_type {
+                attrs.push(int_attr("cable_modem.dhcp.log.ia_type", value as i64));
+            }
+            if let Some(value) = entry.ia_addr_count {
+                attrs.push(int_attr("cable_modem.dhcp.log.ia_addr_count", value as i64));
+            }
+            if let Some(value) = entry.options_len {
+                attrs.push(int_attr("cable_modem.dhcp.log.options_count", value as i64));
+            }
+            if let Some(value) = entry.ia_id {
+                attrs.push(int_attr("cable_modem.dhcp.log.ia_id", value));
+            }
+            if let Some(value) = entry.t1 {
+                attrs.push(int_attr("cable_modem.dhcp.log.t1", value as i64));
+            }
+            if let Some(value) = entry.t2 {
+                attrs.push(int_attr("cable_modem.dhcp.log.t2", value as i64));
+            }
+            if let Some(v) = entry.preferred_lifetime {
+                attrs.push(int_attr(
+                    "cable_modem.dhcp.log.preferred_lifetime_seconds",
+                    v as i64,
+                ));
+            }
+            if let Some(v) = entry.valid_lifetime {
+                attrs.push(int_attr(
+                    "cable_modem.dhcp.log.valid_lifetime_seconds",
+                    v as i64,
+                ));
+            }
+
+            records.push(json!({
+                "timeUnixNano": now,
+                "observedTimeUnixNano": now,
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": { "stringValue": format!(
+                    "DHCPv6 {} on {}: {}",
+                    entry.message_type, entry.interface, entry.stateful_addr
+                )},
                 "attributes": attrs,
             }));
 
@@ -985,6 +1567,14 @@ fn downstream_channel_attrs(
 
 fn mhz_to_hz_i64(freq_mhz: f64) -> i64 {
     (freq_mhz * 1_000_000.0).round() as i64
+}
+
+fn bool_label(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "enabled",
+        Some(false) => "disabled",
+        None => "unknown",
+    }
 }
 
 fn str_attr(key: &str, value: &str) -> Value {
@@ -1154,7 +1744,7 @@ fn extract_ofdma_profile(description: &str) -> Option<(String, u32)> {
 mod tests {
     use super::*;
     use crate::parser::{
-        CmState, DhcpInfo, DocsisPhase, DownstreamOfdm, DownstreamQam, EventLogEntry,
+        CmState, DhcpInfo, DhcpLogEntry, DocsisPhase, DownstreamOfdm, DownstreamQam, EventLogEntry,
         InterfaceInfo, ProductInfo, QosFlow, ScrapedData, ServiceFlowConfig, SpectrumChunk,
         UpstreamOfdm, UpstreamQam, VersionInfo,
     };
@@ -1280,6 +1870,51 @@ mod tests {
     }
 
     #[test]
+    fn otlp_includes_dhcpv6_log_records() {
+        let mut data = sample_data();
+        data.dhcp_log = vec![DhcpLogEntry {
+            index: 3,
+            timestamp: "Sun, 25 Oct 2026 09:26:54 +0100".into(),
+            interface: "wan0".into(),
+            message_type: "renew".into(),
+            client_id: "aa:bb".into(),
+            server_id: "cc:dd".into(),
+            preference: Some(-1),
+            ia_type: Some(3),
+            ia_id: Some(-763769691),
+            t1: Some(172800),
+            t2: Some(483840),
+            ia_addr_count: Some(1),
+            stateful_addr: "2a02:8101:1130:d::c2a".into(),
+            preferred_lifetime: Some(604800),
+            valid_lifetime: Some(604800),
+            options_len: Some(86),
+            options: vec![(1, "client ID".into())],
+        }];
+        let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
+        let body = client.build_logs_body(&data, "1000000000").unwrap();
+        let records = body["resourceLogs"][0]["scopeLogs"][0]["logRecords"]
+            .as_array()
+            .unwrap();
+        assert_eq!(records.len(), 6);
+        let dhcp = records
+            .iter()
+            .find(|r| {
+                attr_value(&r["attributes"], "event.name").as_deref()
+                    == Some("cable_modem.dhcp_log")
+            })
+            .expect("DHCP log record should be present");
+        assert_eq!(
+            attr_value(&dhcp["attributes"], "cable_modem.dhcp.log.message_type").as_deref(),
+            Some("renew")
+        );
+        assert_eq!(
+            attr_value(&dhcp["attributes"], "cable_modem.dhcp.log.stateful_addr").as_deref(),
+            Some("2a02:8101:1130:d::c2a")
+        );
+    }
+
+    #[test]
     fn otlp_metrics_fixture_snapshot() {
         let data = fixture_data();
         let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
@@ -1356,6 +1991,8 @@ mod tests {
             include_str!("../tests/fixtures/cm_state_cgi.html"),
             include_str!("../tests/fixtures/event_cgi.html"),
             include_str!("../tests/fixtures/config_params_cgi.html"),
+            "",
+            "",
             "",
             None,
             1.5,
@@ -1487,6 +2124,8 @@ mod tests {
                 fft_type: "4K".into(),
                 channel_width_mhz: 192.0,
                 active_subcarriers: 3800,
+                first_active_subcarrier_mhz: 135.0,
+                last_active_subcarrier_mhz: 324.0,
                 rxmer_pilot_db: 38.1,
                 rxmer_plc_db: 37.9,
                 rxmer_data_db: 37.4,
@@ -1511,7 +2150,9 @@ mod tests {
             }],
             uptime_seconds: Some(3600),
             cm_status: "OPERATIONAL".into(),
+            status_info: Default::default(),
             version_info: VersionInfo {
+                system: "ARRIS".into(),
                 hardware_rev: "1".into(),
                 vendor: "ARRIS".into(),
                 bootloader: "boot".into(),
@@ -1525,6 +2166,15 @@ mod tests {
                 cm_ip: "192.0.2.10".into(),
                 cm_subnet: "255.255.255.0".into(),
                 cm_gateway: "192.0.2.1".into(),
+                tftp_server: "192.0.2.2".into(),
+                time_server: "192.0.2.3".into(),
+                time_offset_seconds: Some(0),
+                boot_file: "boot.cm".into(),
+                software_filename: "firmware.simg".into(),
+                mdd_ip_override: Some(0),
+                mdd_ip_override_enabled: Some(false),
+                mdd_ip_mode: Some(2),
+                mdd_ip_mode_name: "APM".into(),
                 lease_total_secs: Some(600),
                 lease_remaining_secs: Some(303),
                 rebind_total_secs: Some(500),
@@ -1547,6 +2197,8 @@ mod tests {
                 }],
                 bpi_status: "Authorized".into(),
                 tod_status: "Acquired".into(),
+                dhcp_ipv4_attempts: None,
+                dhcp_ipv6_attempts: None,
             },
             events: vec![
                 EventLogEntry {
@@ -1584,11 +2236,14 @@ mod tests {
                 name: "WAN0".into(),
                 provisioned: "Yes".into(),
                 state: "Up".into(),
+                speed_mbps: "2500".into(),
                 mac_address: "aa:bb:cc:dd:ee:ff".into(),
             }],
             product_info: ProductInfo {
                 ethernet_phy_type: "1x2.5G-GPY21X switch".into(),
                 logging_components_enabled: vec![("COMMON_COMPONENTS".into(), 2)],
+                logging_components: vec![],
+                severity_levels: vec![],
             },
             spectrum: vec![SpectrumChunk {
                 chunk: 0,
@@ -1604,12 +2259,18 @@ mod tests {
             service_flow_configs: vec![ServiceFlowConfig {
                 direction: "Downstream".into(),
                 index: 0,
-                max_traffic_rate_kbps: 1126400,
+                max_traffic_rate_bps: 1126400,
                 max_traffic_burst: 3044,
-                min_reserved_rate_kbps: 0,
+                min_reserved_rate_bps: 0,
                 traffic_priority: 1,
                 scheduling_type: 2,
+                ..Default::default()
             }],
+            packet_classifications: vec![],
+            common_config: Default::default(),
+            diplexer_bands: vec![],
+            dhcp_log: vec![],
+            dsx_log: vec![],
             scrape_duration_secs: 1.23,
             parse_status: Default::default(),
         }

@@ -21,6 +21,8 @@ pub struct DownstreamOfdm {
     pub fft_type: String,
     pub channel_width_mhz: f64,
     pub active_subcarriers: u32,
+    pub first_active_subcarrier_mhz: f64,
+    pub last_active_subcarrier_mhz: f64,
     pub rxmer_pilot_db: f64,
     pub rxmer_plc_db: f64,
     pub rxmer_data_db: f64,
@@ -63,8 +65,9 @@ pub struct DocsisPhase {
     pub status: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VersionInfo {
+    pub system: String,
     pub hardware_rev: String,
     pub vendor: String,
     pub bootloader: String,
@@ -72,18 +75,23 @@ pub struct VersionInfo {
     pub model: String,
     pub serial: String,
     pub firmware_name: String,
-    #[allow(dead_code)]
     pub firmware_build_time: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DhcpInfo {
-    #[allow(dead_code)]
     pub cm_ip: String,
-    #[allow(dead_code)]
     pub cm_subnet: String,
-    #[allow(dead_code)]
     pub cm_gateway: String,
+    pub tftp_server: String,
+    pub time_server: String,
+    pub time_offset_seconds: Option<i64>,
+    pub boot_file: String,
+    pub software_filename: String,
+    pub mdd_ip_override: Option<u32>,
+    pub mdd_ip_override_enabled: Option<bool>,
+    pub mdd_ip_mode: Option<u32>,
+    pub mdd_ip_mode_name: String,
     pub lease_total_secs: Option<u64>,
     pub lease_remaining_secs: Option<u64>,
     #[allow(dead_code)]
@@ -94,12 +102,14 @@ pub struct DhcpInfo {
     pub renew_remaining_secs: Option<u64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CmState {
     pub overall_state: String,
     pub phases: Vec<DocsisPhase>,
     pub bpi_status: String,
     pub tod_status: String,
+    pub dhcp_ipv4_attempts: Option<u32>,
+    pub dhcp_ipv6_attempts: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -117,13 +127,16 @@ pub struct InterfaceInfo {
     pub name: String,
     pub provisioned: String,
     pub state: String,
+    pub speed_mbps: String,
     pub mac_address: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProductInfo {
     pub ethernet_phy_type: String,
     pub logging_components_enabled: Vec<(String, u32)>,
+    pub logging_components: Vec<LoggingComponent>,
+    pub severity_levels: Vec<SeverityLevel>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,15 +149,108 @@ pub struct SpectrumChunk {
     pub bins_raw_tenth_dbmv: Vec<i16>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ServiceFlowConfig {
     pub direction: String,
     pub index: u32,
-    pub max_traffic_rate_kbps: u64,
+    pub reference: u32,
+    pub sf_id: Option<u64>,
+    pub service_class: String,
+    pub qos_set_type: u32,
+    pub max_traffic_rate_bps: u64,
     pub max_traffic_burst: u64,
-    pub min_reserved_rate_kbps: u64,
+    pub min_reserved_rate_bps: u64,
+    pub min_reserved_rate_pktsize: u32,
+    pub active_qos_timeout: u32,
+    pub admitted_qos_timeout: u32,
+    pub max_concat_burst: u32,
     pub traffic_priority: u32,
     pub scheduling_type: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct PacketClassification {
+    pub direction: String,
+    pub index: u32,
+    pub service_flow: u64,
+    pub identifier: u32,
+    pub rule_priority: u32,
+    pub activation_state: u32,
+    pub ip_protocol: u32,
+    pub source_port_start: Option<u32>,
+    pub source_port_end: Option<u32>,
+    pub dest_port_start: Option<u32>,
+    pub dest_port_end: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CommonConfig {
+    pub config_file: String,
+    pub network_access: Option<bool>,
+    pub upgrade_server: String,
+    pub max_cpe_allowed: Option<u32>,
+    pub privacy_enable: Option<u32>,
+    pub snmp_mib: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StatusInfo {
+    pub time_and_date: String,
+    pub product_type: String,
+    pub hardware_info: String,
+    pub router_enabled: Option<bool>,
+    pub telemetry_enabled: Option<bool>,
+    pub rf_hw: String,
+    pub market: String,
+    pub l2vpn_attachment_circuit_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiplexerBand {
+    pub band: u32,
+    pub upstream_range: String,
+    pub downstream_range: String,
+    pub current: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoggingComponent {
+    pub index: u32,
+    pub name: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SeverityLevel {
+    pub index: u32,
+    pub name: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DhcpLogEntry {
+    pub index: u32,
+    pub timestamp: String,
+    pub interface: String,
+    pub message_type: String,
+    pub client_id: String,
+    pub server_id: String,
+    pub preference: Option<i32>,
+    pub ia_type: Option<u32>,
+    pub ia_id: Option<i64>,
+    pub t1: Option<u64>,
+    pub t2: Option<u64>,
+    pub ia_addr_count: Option<u32>,
+    pub stateful_addr: String,
+    pub preferred_lifetime: Option<u64>,
+    pub valid_lifetime: Option<u64>,
+    pub options_len: Option<u32>,
+    pub options: Vec<(u32, String)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DsxLogEntry {
+    pub cells: Vec<String>,
 }
 
 /// Per-section parse indicators. A `false` value means the section was present
@@ -161,6 +267,8 @@ pub struct ParseStatus {
     pub interfaces: bool,
     pub product: bool,
     pub service_flow_config: bool,
+    pub dhcp_log: bool,
+    pub dsx_log: bool,
     pub spectrum: Option<bool>,
 }
 
@@ -177,6 +285,8 @@ impl ParseStatus {
             ("interfaces", self.interfaces),
             ("product", self.product),
             ("service_flow_config", self.service_flow_config),
+            ("dhcp_log", self.dhcp_log),
+            ("dsx_log", self.dsx_log),
         ]
         .into_iter()
         .chain(self.spectrum.map(|ok| ("spectrum", ok)))
@@ -212,6 +322,7 @@ pub struct ScrapedData {
     pub upstream_ofdm: Vec<UpstreamOfdm>,
     pub uptime_seconds: Option<u64>,
     pub cm_status: String,
+    pub status_info: StatusInfo,
     pub version_info: VersionInfo,
     pub dhcp_info: DhcpInfo,
     pub qos_flows: Vec<QosFlow>,
@@ -224,6 +335,11 @@ pub struct ScrapedData {
     pub cpe_dynamic: u32,
     pub dhcp_state: String,
     pub service_flow_configs: Vec<ServiceFlowConfig>,
+    pub packet_classifications: Vec<PacketClassification>,
+    pub common_config: CommonConfig,
+    pub diplexer_bands: Vec<DiplexerBand>,
+    pub dhcp_log: Vec<DhcpLogEntry>,
+    pub dsx_log: Vec<DsxLogEntry>,
     pub scrape_duration_secs: f64,
     pub parse_status: ParseStatus,
 }
@@ -255,6 +371,8 @@ pub fn parse_all(
     event_html: &str,
     config_params_html: &str,
     product_html: &str,
+    dhcp_log_html: &str,
+    dsx_html: &str,
     spectrum_html: Option<&str>,
     scrape_duration_secs: f64,
 ) -> std::result::Result<ScrapedData, ParseFailure> {
@@ -262,6 +380,7 @@ pub fn parse_all(
     let (cpe_static, cpe_dynamic) = parse_cpe_counts(status_html);
     let uptime_seconds = parse_uptime(status_html);
     let cm_status = parse_cm_status(status_html);
+    let status_info = parse_status_info(status_html);
     let version_info = parse_version_info(vers_html, status_html);
     let dhcp_info = parse_dhcp_info(dhcp_html);
     let dhcp_state = parse_dhcp_state(dhcp_html);
@@ -272,6 +391,11 @@ pub fn parse_all(
     let product_info = parse_product_info(status_html, product_html);
     let spectrum = spectrum_html.map(parse_spectrum_chunks).unwrap_or_default();
     let service_flow_configs = parse_service_flow_configs(config_params_html);
+    let packet_classifications = parse_packet_classifications(config_params_html);
+    let common_config = parse_common_config(config_params_html);
+    let diplexer_bands = parse_diplexer_bands(status_html);
+    let dhcp_log = parse_dhcp_log(dhcp_log_html);
+    let dsx_log = parse_dsx_log(dsx_html);
 
     let parse_status = ParseStatus {
         status: !cm_status.is_empty(),
@@ -287,6 +411,8 @@ pub fn parse_all(
             || !product_info.logging_components_enabled.is_empty(),
         service_flow_config: !service_flow_configs.is_empty()
             || config_params_html.contains("ServiceFlow"),
+        dhcp_log: !dhcp_log.is_empty() || dhcp_log_html.contains("CM DHCP LOG"),
+        dsx_log: !dsx_log.is_empty() || dsx_html.contains("DSX Message Log"),
         spectrum: spectrum_html.map(|html| html.contains("spectrum_data") && !spectrum.is_empty()),
     };
 
@@ -317,6 +443,7 @@ pub fn parse_all(
         upstream_ofdm: channels.upstream_ofdm,
         uptime_seconds,
         cm_status,
+        status_info,
         version_info,
         dhcp_info,
         dhcp_state,
@@ -329,6 +456,11 @@ pub fn parse_all(
         cpe_static,
         cpe_dynamic,
         service_flow_configs,
+        packet_classifications,
+        common_config,
+        diplexer_bands,
+        dhcp_log,
+        dsx_log,
         scrape_duration_secs,
         parse_status,
     })
@@ -423,6 +555,8 @@ fn parse_downstream_ofdm_row(cells: &[String]) -> Option<DownstreamOfdm> {
         fft_type: cells[1].clone(),
         channel_width_mhz: cells[2].parse().ok()?,
         active_subcarriers: cells[3].parse().ok()?,
+        first_active_subcarrier_mhz: cells[4].parse().ok()?,
+        last_active_subcarrier_mhz: cells[5].parse().ok()?,
         rxmer_pilot_db: cells[6].parse().ok()?,
         rxmer_plc_db: cells[7].parse().ok()?,
         rxmer_data_db: cells[8].parse().ok()?,
@@ -471,6 +605,101 @@ fn number_with_unit(cell: &str, unit: &str) -> Option<f64> {
     cell.trim().strip_suffix(unit)?.trim().parse().ok()
 }
 
+fn table_rows(html: &str) -> Vec<Vec<String>> {
+    let document = Html::parse_document(html);
+    let Ok(row_selector) = Selector::parse("tr") else {
+        return Vec::new();
+    };
+    let Ok(cell_selector) = Selector::parse("td") else {
+        return Vec::new();
+    };
+    document
+        .select(&row_selector)
+        .map(|row| {
+            row.select(&cell_selector)
+                .map(|cell| cell.text().collect::<String>().trim().to_string())
+                .collect()
+        })
+        .filter(|cells: &Vec<String>| !cells.is_empty())
+        .collect()
+}
+
+fn normalize_label(label: &str) -> String {
+    label
+        .trim()
+        .trim_end_matches(':')
+        .trim()
+        .to_ascii_lowercase()
+}
+
+fn table_value(rows: &[Vec<String>], label: &str) -> Option<String> {
+    let wanted = normalize_label(label);
+    rows.iter().find_map(|row| {
+        if row.len() >= 2 && normalize_label(&row[0]) == wanted {
+            let value = row[1].trim();
+            (!value.is_empty()).then(|| value.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn enabled_value(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "enabled" | "yes" | "on" | "true" => Some(true),
+        "disabled" | "no" | "off" | "false" => Some(false),
+        _ => None,
+    }
+}
+
+fn parse_status_info(html: &str) -> StatusInfo {
+    let rows = table_rows(html);
+    let product_type = Regex::new(r"Product Type:\s*</b>\s*([^<\n]+)")
+        .unwrap()
+        .captures(html)
+        .map(|c| c[1].trim().to_string())
+        .unwrap_or_default();
+
+    let l2vpn_attachment_circuit_ids = rows
+        .iter()
+        .filter(|row| {
+            row.len() >= 2
+                && normalize_label(&row[0]).starts_with("attachment circuit id")
+                && !row[1].trim().is_empty()
+        })
+        .map(|row| row[1].trim().to_string())
+        .collect();
+
+    StatusInfo {
+        time_and_date: table_value(&rows, "Time and Date").unwrap_or_default(),
+        product_type,
+        hardware_info: table_value(&rows, "Hardware Info").unwrap_or_default(),
+        router_enabled: table_value(&rows, "Router").and_then(|v| enabled_value(&v)),
+        telemetry_enabled: table_value(&rows, "Telemetry").and_then(|v| enabled_value(&v)),
+        rf_hw: table_value(&rows, "RF HW").unwrap_or_default(),
+        market: table_value(&rows, "Market").unwrap_or_default(),
+        l2vpn_attachment_circuit_ids,
+    }
+}
+
+fn parse_diplexer_bands(html: &str) -> Vec<DiplexerBand> {
+    table_rows(html)
+        .into_iter()
+        .filter_map(|row| {
+            if row.len() < 4 {
+                return None;
+            }
+            let band = row[0].strip_prefix("Band")?.trim().parse().ok()?;
+            Some(DiplexerBand {
+                band,
+                upstream_range: row[1].trim().to_string(),
+                downstream_range: row[2].trim().to_string(),
+                current: row[3].trim().eq_ignore_ascii_case("X"),
+            })
+        })
+        .collect()
+}
+
 fn parse_uptime(html: &str) -> Option<u64> {
     let re =
         Regex::new(r"System Uptime:\s*</td>\s*<td>(\d+)\s*d:\s*(\d+)\s*h:\s*(\d+)\s*m").unwrap();
@@ -489,6 +718,12 @@ fn parse_cm_status(html: &str) -> String {
 }
 
 fn parse_version_info(vers_html: &str, status_html: &str) -> VersionInfo {
+    let system = Regex::new(r"System:\s*</td>\s*<td[^>]*>([^<]+)")
+        .unwrap()
+        .captures(vers_html)
+        .map(|c| c[1].trim().to_string())
+        .unwrap_or_default();
+
     let hw_rev = Regex::new(r"HW_REV:\s*([^\n<]+)")
         .unwrap()
         .captures(vers_html)
@@ -543,6 +778,7 @@ fn parse_version_info(vers_html: &str, status_html: &str) -> VersionInfo {
         .unwrap_or_default();
 
     VersionInfo {
+        system,
         hardware_rev: hw_rev,
         vendor,
         bootloader,
@@ -580,10 +816,24 @@ fn parse_dhcp_info(html: &str) -> DhcpInfo {
     let renew_total_secs = parse_dhcp_time(html, "Renew:");
     let renew_remaining_secs = parse_dhcp_remaining(html, "Renew:");
 
+    let rows = table_rows(html);
+    let mdd_override_raw = table_value(&rows, "MDD IP Override").unwrap_or_default();
+    let mdd_mode_raw = table_value(&rows, "MDD IP Mode").unwrap_or_default();
+    let offset_raw = table_value(&rows, "CM Time Offset").unwrap_or_default();
+
     DhcpInfo {
         cm_ip,
         cm_subnet,
         cm_gateway,
+        tftp_server: table_value(&rows, "CM TFTP Server").unwrap_or_default(),
+        time_server: table_value(&rows, "CM Time Server").unwrap_or_default(),
+        time_offset_seconds: offset_raw.parse().ok(),
+        boot_file: table_value(&rows, "CM Boot file").unwrap_or_default(),
+        software_filename: table_value(&rows, "Software Filename").unwrap_or_default(),
+        mdd_ip_override: leading_u32(&mdd_override_raw),
+        mdd_ip_override_enabled: parenthesized_enabled(&mdd_override_raw),
+        mdd_ip_mode: leading_u32(&mdd_mode_raw),
+        mdd_ip_mode_name: parenthesized_value(&mdd_mode_raw).unwrap_or_default(),
         lease_total_secs,
         lease_remaining_secs,
         rebind_total_secs,
@@ -591,6 +841,23 @@ fn parse_dhcp_info(html: &str) -> DhcpInfo {
         renew_total_secs,
         renew_remaining_secs,
     }
+}
+
+fn leading_u32(value: &str) -> Option<u32> {
+    value
+        .split_whitespace()
+        .next()
+        .and_then(|token| token.parse().ok())
+}
+
+fn parenthesized_value(value: &str) -> Option<String> {
+    let start = value.find('(')?;
+    let end = value.rfind(')')?;
+    (end > start).then(|| value[start + 1..end].trim().to_string())
+}
+
+fn parenthesized_enabled(value: &str) -> Option<bool> {
+    parenthesized_value(value).and_then(|v| enabled_value(&v))
 }
 
 fn parse_dhcp_time(html: &str, label: &str) -> Option<u64> {
@@ -660,12 +927,25 @@ fn parse_cm_state(html: &str) -> CmState {
         .map(|c| c[1].trim().to_string())
         .unwrap_or_default();
 
+    let dhcp_ipv4_attempts = parse_attempts(html, "IPv4 Attempt\\(s\\)");
+    let dhcp_ipv6_attempts = parse_attempts(html, "IPv6 Attempt\\(s\\)");
+
     CmState {
         overall_state,
         phases,
         bpi_status,
         tod_status,
+        dhcp_ipv4_attempts,
+        dhcp_ipv6_attempts,
     }
+}
+
+fn parse_attempts(html: &str, label: &str) -> Option<u32> {
+    let pattern = format!(r"{}\s*</td>\s*<td[^>]*>\s*(\d+)", label);
+    Regex::new(&pattern)
+        .ok()?
+        .captures(html)
+        .and_then(|c| c[1].parse().ok())
 }
 
 fn parse_event_log(html: &str) -> Vec<EventLogEntry> {
@@ -708,6 +988,7 @@ fn parse_interfaces(html: &str) -> Vec<InterfaceInfo> {
                 name,
                 provisioned: c[2].trim().to_string(),
                 state: c[3].trim().to_string(),
+                speed_mbps: c[4].trim().to_string(),
                 mac_address: c[5].trim().to_string(),
             })
         })
@@ -738,10 +1019,48 @@ fn parse_product_info(status_html: &str, product_html: &str) -> ProductInfo {
         logging_components_enabled.push((group, count));
     }
 
+    let (component_html, severity_html) = product_html
+        .split_once("Severity Levels")
+        .unwrap_or((product_html, ""));
+    let logging_components = parse_enabled_cells(component_html)
+        .into_iter()
+        .map(|(index, name, enabled)| LoggingComponent {
+            index,
+            name,
+            enabled,
+        })
+        .collect();
+    let severity_levels = parse_enabled_cells(severity_html)
+        .into_iter()
+        .map(|(index, name, enabled)| SeverityLevel {
+            index,
+            name,
+            enabled,
+        })
+        .collect();
+
     ProductInfo {
         ethernet_phy_type,
         logging_components_enabled,
+        logging_components,
+        severity_levels,
     }
+}
+
+fn parse_enabled_cells(html: &str) -> Vec<(u32, String, bool)> {
+    let re = Regex::new(r"\[\s*(\d+)\]\s*([A-Za-z0-9_]+)\s*:\s*(Enabled|Disabled)").unwrap();
+    table_rows(html)
+        .into_iter()
+        .flatten()
+        .filter_map(|cell| {
+            let caps = re.captures(&cell)?;
+            Some((
+                caps[1].parse().ok()?,
+                caps[2].to_string(),
+                caps[3].eq_ignore_ascii_case("Enabled"),
+            ))
+        })
+        .collect()
 }
 
 fn parse_spectrum_chunks(html: &str) -> Vec<SpectrumChunk> {
@@ -809,61 +1128,202 @@ fn parse_dhcp_state(html: &str) -> String {
 }
 
 fn parse_service_flow_configs(html: &str) -> Vec<ServiceFlowConfig> {
-    let mut flows = Vec::new();
-
-    // Split on "UpstreamServiceFlow" and "DownstreamServiceFlow"
     let dir_re = Regex::new(r"(Upstream|Downstream)ServiceFlow\s*=").unwrap();
-    let max_rate_re = Regex::new(r"SfMaxTrafficRate\s*=\s*(\d+)").unwrap();
-    let max_burst_re = Regex::new(r"SfMaxTrafficBurst\s*=\s*(\d+)").unwrap();
-    let min_rate_re = Regex::new(r"SfMinReservedRate\s*=\s*(\d+)").unwrap();
-    let priority_re = Regex::new(r"SfTrafficPriority\s*=\s*(\d+)").unwrap();
-    let sched_re = Regex::new(r"SfSchedulingType\s*=\s*(\d+)").unwrap();
+    let starts: Vec<(usize, usize, String)> = dir_re
+        .captures_iter(html)
+        .filter_map(|cap| {
+            let full = cap.get(0)?;
+            Some((full.start(), full.end(), cap[1].to_string()))
+        })
+        .collect();
 
-    for (i, cap) in dir_re.captures_iter(html).enumerate() {
-        let direction = cap[1].to_string();
-        // Find the position of this match and extract a chunk of text after it
-        let start = cap.get(0).unwrap().end();
-        // Grab ~500 chars or until the next ServiceFlow block
-        let remaining = &html[start..];
-        let end = dir_re
-            .find(remaining)
-            .map(|m| m.start())
-            .unwrap_or(remaining.len().min(500));
-        let chunk = &remaining[..end];
+    starts
+        .iter()
+        .enumerate()
+        .map(|(index, (_, start, direction))| {
+            let end = starts
+                .get(index + 1)
+                .map(|(next_start, _, _)| *next_start)
+                .unwrap_or(html.len());
+            let chunk = &html[*start..end];
+            ServiceFlowConfig {
+                direction: direction.clone(),
+                index: index as u32,
+                reference: field_number(chunk, "SfReference").unwrap_or(0),
+                sf_id: Regex::new(r"#\s*SfId\s*=\s*(\d+)")
+                    .unwrap()
+                    .captures(chunk)
+                    .and_then(|c| c[1].parse().ok()),
+                service_class: Regex::new(r#"SfClassName\s*=\s*"([^"]*)""#)
+                    .unwrap()
+                    .captures(chunk)
+                    .map(|c| c[1].to_string())
+                    .unwrap_or_default(),
+                qos_set_type: field_number(chunk, "SfQosSetType").unwrap_or(0),
+                max_traffic_rate_bps: field_number(chunk, "SfMaxTrafficRate").unwrap_or(0),
+                max_traffic_burst: field_number(chunk, "SfMaxTrafficBurst").unwrap_or(0),
+                min_reserved_rate_bps: field_number(chunk, "SfMinReservedRate").unwrap_or(0),
+                min_reserved_rate_pktsize: field_number(chunk, "SfMinReservedRatePktsize")
+                    .unwrap_or(0),
+                active_qos_timeout: field_number(chunk, "SfActiveQosTimeout").unwrap_or(0),
+                admitted_qos_timeout: field_number(chunk, "SfAdmittedQosTimeout").unwrap_or(0),
+                max_concat_burst: field_number(chunk, "SfMaxConcatBurst").unwrap_or(0),
+                traffic_priority: field_number(chunk, "SfTrafficPriority").unwrap_or(0),
+                scheduling_type: field_number(chunk, "SfSchedulingType").unwrap_or(0),
+            }
+        })
+        .collect()
+}
 
-        let max_rate = max_rate_re
-            .captures(chunk)
-            .and_then(|c| c[1].parse().ok())
-            .unwrap_or(0);
-        let max_burst = max_burst_re
-            .captures(chunk)
-            .and_then(|c| c[1].parse().ok())
-            .unwrap_or(0);
-        let min_rate = min_rate_re
-            .captures(chunk)
-            .and_then(|c| c[1].parse().ok())
-            .unwrap_or(0);
-        let priority = priority_re
-            .captures(chunk)
-            .and_then(|c| c[1].parse().ok())
-            .unwrap_or(0);
-        let sched = sched_re
-            .captures(chunk)
-            .and_then(|c| c[1].parse().ok())
-            .unwrap_or(0);
+fn field_number<T: std::str::FromStr>(chunk: &str, name: &str) -> Option<T> {
+    let pattern = format!(r"{}\s*=\s*(-?\d+)", regex::escape(name));
+    Regex::new(&pattern)
+        .ok()?
+        .captures(chunk)
+        .and_then(|c| c[1].parse().ok())
+}
 
-        flows.push(ServiceFlowConfig {
-            direction,
-            index: i as u32,
-            max_traffic_rate_kbps: max_rate,
-            max_traffic_burst: max_burst,
-            min_reserved_rate_kbps: min_rate,
-            traffic_priority: priority,
-            scheduling_type: sched,
-        });
+fn parse_packet_classifications(html: &str) -> Vec<PacketClassification> {
+    let re = Regex::new(r"(Upstream|Downstream)PacketClassification\s*=").unwrap();
+    let starts: Vec<(usize, usize, String)> = re
+        .captures_iter(html)
+        .filter_map(|cap| {
+            let full = cap.get(0)?;
+            Some((full.start(), full.end(), cap[1].to_string()))
+        })
+        .collect();
+
+    starts
+        .iter()
+        .enumerate()
+        .map(|(index, (_, start, direction))| {
+            let end = starts
+                .get(index + 1)
+                .map(|(next_start, _, _)| *next_start)
+                .unwrap_or(html.len());
+            let chunk = &html[*start..end];
+            PacketClassification {
+                direction: direction.clone(),
+                index: index as u32,
+                service_flow: field_number(chunk, "PcServiceFlow").unwrap_or(0),
+                identifier: field_number(chunk, "PcIdentifier").unwrap_or(0),
+                rule_priority: field_number(chunk, "PcRulePriority").unwrap_or(0),
+                activation_state: field_number(chunk, "PcActivationState").unwrap_or(0),
+                ip_protocol: field_number(chunk, "PcIpProtocol").unwrap_or(0),
+                source_port_start: field_number(chunk, "PcIpSourcePortStart"),
+                source_port_end: field_number(chunk, "PcIpSourcePortEnd"),
+                dest_port_start: field_number(chunk, "PcIpDestPortStart"),
+                dest_port_end: field_number(chunk, "PcIpDestPortEnd"),
+            }
+        })
+        .collect()
+}
+
+fn parse_common_config(html: &str) -> CommonConfig {
+    let config_file = Regex::new(r"CM Config File:\s*</td>\s*<td[^>]*>\s*([^<\s]+)")
+        .unwrap()
+        .captures(html)
+        .map(|c| c[1].trim().to_string())
+        .unwrap_or_default();
+
+    let network_access = Regex::new(r"NetworkAccess\s*=\s*([A-Za-z]+)")
+        .unwrap()
+        .captures(html)
+        .and_then(|c| enabled_value(&c[1]));
+    let upgrade_server = Regex::new(r"UpgradeServer\s*=\s*([^\s<]+)")
+        .unwrap()
+        .captures(html)
+        .map(|c| c[1].to_string())
+        .unwrap_or_default();
+    let max_cpe_allowed = field_number(html, "MaxCpeAllowed");
+    let privacy_enable = field_number(html, "PrivacyEnable");
+    let snmp_mib = Regex::new(r"SnmpMib\s*=\s*([^\n<]+)")
+        .unwrap()
+        .captures_iter(html)
+        .map(|c| c[1].trim().to_string())
+        .collect();
+
+    CommonConfig {
+        config_file,
+        network_access,
+        upgrade_server,
+        max_cpe_allowed,
+        privacy_enable,
+        snmp_mib,
     }
+}
 
-    flows
+fn parse_dhcp_log(html: &str) -> Vec<DhcpLogEntry> {
+    let block_re = Regex::new(r"(?s)CM DHCP LOG\s+(\d+)<br>\s*([^<]*)<br>(.*?)</FONT>").unwrap();
+    block_re
+        .captures_iter(html)
+        .filter_map(|caps| {
+            let index = caps[1].parse().ok()?;
+            let timestamp = caps[2].trim().to_string();
+            let chunk = &caps[3];
+            let ia_addr =
+                Regex::new(r"Stateful addr:\s*([^,<]+),\s*Pltime:\s*(\d+),\s*Vltime:\s*(\d+)")
+                    .unwrap()
+                    .captures(chunk);
+            let options = Regex::new(r"Option:\s*\[(\d+)\]([^,<]+),\s*option len:\s*(\d+)")
+                .unwrap()
+                .captures_iter(chunk)
+                .filter_map(|c| Some((c[1].parse().ok()?, c[2].trim().to_string())))
+                .collect();
+
+            Some(DhcpLogEntry {
+                index,
+                timestamp,
+                interface: field_text(chunk, "Interface"),
+                message_type: field_text(chunk, "Message type"),
+                client_id: field_text(chunk, "Client ID"),
+                server_id: field_text(chunk, "Server ID"),
+                preference: field_number_colon(chunk, "Preference"),
+                ia_type: field_number_colon(chunk, "IA type"),
+                ia_id: field_number_colon(chunk, "IA ID"),
+                t1: field_number_colon(chunk, "t1"),
+                t2: field_number_colon(chunk, "t2"),
+                ia_addr_count: field_number_colon(chunk, "IA addr count"),
+                stateful_addr: ia_addr
+                    .as_ref()
+                    .map(|c| c[1].trim().to_string())
+                    .unwrap_or_default(),
+                preferred_lifetime: ia_addr.as_ref().and_then(|c| c[2].parse().ok()),
+                valid_lifetime: ia_addr.as_ref().and_then(|c| c[3].parse().ok()),
+                options_len: field_number_colon(chunk, "Options buffer: len"),
+                options,
+            })
+        })
+        .collect()
+}
+
+fn field_number_colon<T: std::str::FromStr>(chunk: &str, name: &str) -> Option<T> {
+    let pattern = format!(r"{}\s*:\s*(-?\d+)", regex::escape(name));
+    Regex::new(&pattern)
+        .ok()?
+        .captures(chunk)
+        .and_then(|c| c[1].parse().ok())
+}
+
+fn field_text(chunk: &str, name: &str) -> String {
+    let pattern = format!(r"{}\s*:\s*([^<]*)", regex::escape(name));
+    Regex::new(&pattern)
+        .ok()
+        .and_then(|re| re.captures(chunk))
+        .map(|c| c[1].trim().to_string())
+        .unwrap_or_default()
+}
+
+fn parse_dsx_log(html: &str) -> Vec<DsxLogEntry> {
+    table_rows(html)
+        .into_iter()
+        .filter(|row| {
+            !row.is_empty()
+                && !row[0].contains("DSX Message Log")
+                && row.iter().any(|cell| !cell.trim().is_empty())
+        })
+        .map(|cells| DsxLogEntry { cells })
+        .collect()
 }
 
 #[cfg(test)]
@@ -971,11 +1431,11 @@ mod tests {
         let flows = parse_service_flow_configs(html);
         assert_eq!(flows.len(), 3);
         assert_eq!(flows[0].direction, "Upstream");
-        assert_eq!(flows[0].max_traffic_rate_kbps, 128000);
+        assert_eq!(flows[0].max_traffic_rate_bps, 128000);
         assert_eq!(flows[0].scheduling_type, 2);
         assert_eq!(flows[1].direction, "Downstream");
-        assert_eq!(flows[1].max_traffic_rate_kbps, 128000);
-        assert_eq!(flows[2].max_traffic_rate_kbps, 1126400);
+        assert_eq!(flows[1].max_traffic_rate_bps, 128000);
+        assert_eq!(flows[2].max_traffic_rate_bps, 1126400);
     }
 
     #[test]
@@ -997,6 +1457,137 @@ mod tests {
         assert_eq!(parsed.bin_spacing_hz, 117187);
         assert_eq!(parsed.resolution_bandwidth, 1);
         assert_eq!(parsed.bins_raw_tenth_dbmv.len(), 4);
+    }
+
+    #[test]
+    fn test_parse_downstream_ofdm_subcarrier_range() {
+        let html = r#"<tr><td>Downstream 1</td><td>4K</td><td>190</td><td>3800</td><td>135</td><td>324</td><td>49</td><td>43</td><td>43</td></tr>"#;
+        let channels = parse_channels(html).downstream_ofdm;
+        assert_eq!(channels.len(), 1);
+        assert!((channels[0].first_active_subcarrier_mhz - 135.0).abs() < 0.01);
+        assert!((channels[0].last_active_subcarrier_mhz - 324.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_status_and_diplexer_details() {
+        let html = r#"
+        <table>
+          <tr><td>Time and Date:</td><td>Thu 2026-11-12 16:08:07</td></tr>
+          <tr><td>Hardware Info</td><td>ARRIS DOCSIS 3.1</td></tr>
+          <tr><td>Router</td><td>DISABLED</td></tr>
+          <tr><td>Telemetry</td><td>DISABLED</td></tr>
+          <tr><td>RF HW</td><td>MAXLINEAR</td></tr>
+          <tr><td>Market</td><td>Euro</td></tr>
+        </table>
+        Product Type:</b> 00121000 00008900
+        <table>
+          <tr><td>Band 0</td><td>5 MHz-85 MHz</td><td>108 MHz-1218 MHz</td><td>X</td></tr>
+          <tr><td>Band 1</td><td>5 MHz-204 MHz</td><td>258 MHz-1218 MHz</td><td> </td></tr>
+        </table>
+        "#;
+        let info = parse_status_info(html);
+        assert_eq!(info.product_type, "00121000 00008900");
+        assert_eq!(info.hardware_info, "ARRIS DOCSIS 3.1");
+        assert_eq!(info.router_enabled, Some(false));
+        assert_eq!(info.rf_hw, "MAXLINEAR");
+        assert_eq!(info.market, "Euro");
+        let bands = parse_diplexer_bands(html);
+        assert_eq!(bands.len(), 2);
+        assert!(bands[0].current);
+        assert!(!bands[1].current);
+    }
+
+    #[test]
+    fn test_parse_dhcp_log_entry() {
+        let html = r#"
+        <TABLE><TR><TD><FONT>CM DHCP LOG 3<br>
+        Sun, 25 Oct 2026 09:26:54 +0100<br>Interface: wan0<br>Message type: renew<br>Client ID: aa:bb<br>Server ID: cc:dd<br>Preference: -1<br>IA_NA/IA_PD count: 1<br>IA details:<br>        IA type: 3, IA ID: -763769691, t1: 172800, t2: 483840, IA addr count: 1<br>        IA prefix addr details:<br>                Stateful addr: 2a02:8101:1130:d::c2a, Pltime: 604800, Vltime: 604800<br>Options buffer: len: 86, details:<br>        Option: [1]client ID, option len: 10<br>        Option: [3]identity association, option len: 40<br></FONT></TD></TR></TABLE>
+        "#;
+        let entries = parse_dhcp_log(html);
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry.index, 3);
+        assert_eq!(entry.message_type, "renew");
+        assert_eq!(entry.ia_id, Some(-763769691));
+        assert_eq!(entry.stateful_addr, "2a02:8101:1130:d::c2a");
+        assert_eq!(entry.preferred_lifetime, Some(604800));
+        assert_eq!(entry.valid_lifetime, Some(604800));
+        assert_eq!(entry.options_len, Some(86));
+        assert_eq!(entry.options.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_service_flow_and_classification_details() {
+        let html = r#"
+            UpstreamServiceFlow =
+                SfReference = 0
+                # SfId = 99369107 -- assigned by CMTS
+                SfClassName = "BE"
+                SfQosSetType = 7
+                SfMaxTrafficRate = 86250000
+                SfMaxTrafficBurst = 65535
+                SfMinReservedRate = 0
+                SfMinReservedRatePktsize = 0
+                SfActiveQosTimeout = 0
+                SfAdmittedQosTimeout = 200
+                SfMaxConcatBurst = 40000
+                SfTrafficPriority = 0
+                SfSchedulingType = 2
+            UpstreamPacketClassification =
+                PcServiceFlow = 99369110
+                PcIdentifier = 48
+                PcRulePriority = 129
+                PcActivationState = 1
+                PcIpProtocol = 17
+                PcIpSourcePortStart = 0
+                PcIpSourcePortEnd = 65535
+            Common CM Config Parameters
+                NetworkAccess = Yes
+                UpgradeServer = 172.22.48.1
+                MaxCpeAllowed = 10
+                PrivacyEnable = 1
+                SnmpMib = docsDevSwAdminStatus.0 2
+            CM Config File:</td><td>tftp://192.0.2.1/boot.cm</td>
+        "#;
+        let flows = parse_service_flow_configs(html);
+        assert_eq!(flows.len(), 1);
+        assert_eq!(flows[0].sf_id, Some(99369107));
+        assert_eq!(flows[0].service_class, "BE");
+        assert_eq!(flows[0].qos_set_type, 7);
+        assert_eq!(flows[0].max_traffic_rate_bps, 86250000);
+        assert_eq!(flows[0].max_concat_burst, 40000);
+        assert_eq!(flows[0].admitted_qos_timeout, 200);
+
+        let pcs = parse_packet_classifications(html);
+        assert_eq!(pcs.len(), 1);
+        assert_eq!(pcs[0].identifier, 48);
+        assert_eq!(pcs[0].ip_protocol, 17);
+        assert_eq!(pcs[0].source_port_end, Some(65535));
+
+        let config = parse_common_config(html);
+        assert_eq!(config.network_access, Some(true));
+        assert_eq!(config.max_cpe_allowed, Some(10));
+        assert_eq!(config.privacy_enable, Some(1));
+        assert_eq!(config.upgrade_server, "172.22.48.1");
+        assert_eq!(config.config_file, "tftp://192.0.2.1/boot.cm");
+        assert_eq!(config.snmp_mib.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_product_component_and_severity_state() {
+        let html = r#"
+        <br><b>[3] COMMON_COMPONENTS</b>: Enabled <br>
+        <table><tr><td>[ 0] CLI: Enabled </td><td>[ 1] ENVOY: Disabled </td></tr></table>
+        Severity Levels
+        <table><tr><td>[ 0] FATAL: Enabled </td><td>[15] INFO_VERBOSE: Disabled</td></tr></table>
+        "#;
+        let product = parse_product_info("", html);
+        assert_eq!(product.logging_components.len(), 2);
+        assert!(product.logging_components[0].enabled);
+        assert!(!product.logging_components[1].enabled);
+        assert_eq!(product.severity_levels.len(), 2);
+        assert!(product.severity_levels[0].enabled);
+        assert!(!product.severity_levels[1].enabled);
     }
 
     fn valid_status() -> &'static str {
@@ -1023,6 +1614,8 @@ mod tests {
             "",
             "",
             "",
+            "",
+            "",
             None,
             0.1,
         )
@@ -1038,7 +1631,7 @@ mod tests {
 
     #[test]
     fn parse_all_rejects_empty_pages() {
-        let err = parse_all("", "", "", "", "", "", "", "", None, 0.1).unwrap_err();
+        let err = parse_all("", "", "", "", "", "", "", "", "", "", None, 0.1).unwrap_err();
         assert!(err.missing.contains(&"status"));
         assert!(err.missing.contains(&"version/model"));
         assert!(!err.status.status);
@@ -1048,8 +1641,21 @@ mod tests {
     #[test]
     fn parse_all_rejects_operational_modem_without_channels() {
         let status = r#"<td>CM Status:</td><td>OPERATIONAL</td>"#;
-        let err =
-            parse_all(status, valid_versions(), "", "", "", "", "", "", None, 0.1).unwrap_err();
+        let err = parse_all(
+            status,
+            valid_versions(),
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            None,
+            0.1,
+        )
+        .unwrap_err();
         assert_eq!(err.missing, vec!["channels"]);
         assert!(!err.status.channels);
     }
@@ -1057,8 +1663,21 @@ mod tests {
     #[test]
     fn parse_all_allows_non_operational_modem_without_channels() {
         let status = r#"<td>CM Status:</td><td>Not Ready</td>"#;
-        let data = parse_all(status, valid_versions(), "", "", "", "", "", "", None, 0.1)
-            .expect("a non-operational modem may have no bonded channels");
+        let data = parse_all(
+            status,
+            valid_versions(),
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            None,
+            0.1,
+        )
+        .expect("a non-operational modem may have no bonded channels");
         assert_eq!(data.cm_status, "Not Ready");
         assert!(data.downstream_qam.is_empty());
         assert!(data.parse_status.channels);

@@ -38,7 +38,7 @@ impl ScrapeObservation {
     fn is_good(&self) -> bool {
         self.modem_up
             && self.cm_status.eq_ignore_ascii_case("OPERATIONAL")
-            && (self.dhcp_state.is_empty() || self.dhcp_state.eq_ignore_ascii_case("bound"))
+            && dhcp_state_is_healthy(&self.dhcp_state)
     }
 }
 
@@ -280,11 +280,40 @@ fn non_operational_reason(cm_status: &str, dhcp_state: &str) -> Option<String> {
         });
     }
 
-    if !dhcp_state.is_empty() && !dhcp_state.eq_ignore_ascii_case("bound") {
+    if !dhcp_state_is_healthy(dhcp_state) {
         return Some(format!("dhcp_state_{}", normalize_token(dhcp_state)));
     }
 
     None
+}
+
+/// DHCP state names vary between IPv4 and IPv6 firmware images. `dhcp6c_idle`
+/// is normal when there is no DHCPv6 transaction in progress, so only
+/// explicitly unhealthy states (or unknown states containing failure markers)
+/// should mark the link down.
+fn dhcp_state_is_healthy(state: &str) -> bool {
+    if state.is_empty() {
+        return true;
+    }
+    let state = state.to_ascii_lowercase();
+    const HEALTHY: [&str; 10] = [
+        "bound",
+        "renew",
+        "rebind",
+        "requesting",
+        "selecting",
+        "init",
+        "dhcp6c_idle",
+        "dhcp6c_bound",
+        "dhcp6c_renew",
+        "dhcp6c_rebind",
+    ];
+    if HEALTHY.contains(&state.as_str()) {
+        return true;
+    }
+    !["fail", "timeout", "expired", "denied", "error"]
+        .iter()
+        .any(|marker| state.contains(marker))
 }
 
 fn normalize_token(s: &str) -> String {
@@ -295,7 +324,7 @@ fn max_rate_bps(flows: &[crate::parser::ServiceFlowConfig], direction: &str) -> 
     flows
         .iter()
         .filter(|f| f.direction.eq_ignore_ascii_case(direction))
-        .map(|f| f.max_traffic_rate_kbps.saturating_mul(1000))
+        .map(|f| f.max_traffic_rate_bps)
         .max()
 }
 
@@ -349,6 +378,27 @@ mod tests {
     }
 
     #[test]
+    fn dhcp6c_idle_is_a_healthy_state() {
+        let mut tracker = LinkStateTracker::new(3, 2);
+        let good = ScrapeObservation {
+            modem_up: true,
+            cm_status: "OPERATIONAL".into(),
+            dhcp_state: "dhcp6c_idle".into(),
+            reason: non_operational_reason("OPERATIONAL", "dhcp6c_idle"),
+            capacity: CapacitySemantic::invalid(100),
+        };
+        assert_eq!(good.reason, None);
+        assert_eq!(tracker.observe(&good).status, "up");
+    }
+
+    #[test]
+    fn explicit_dhcp_failure_is_unhealthy() {
+        assert!(non_operational_reason("OPERATIONAL", "dhcp_failed").is_some());
+        assert!(non_operational_reason("OPERATIONAL", "lease_expired").is_some());
+        assert!(non_operational_reason("OPERATIONAL", "bound").is_none());
+    }
+
+    #[test]
     fn capacity_uses_max_service_flow_rate_with_margin() {
         let data = ScrapedData {
             downstream_qam: vec![],
@@ -357,40 +407,14 @@ mod tests {
             upstream_ofdm: vec![],
             uptime_seconds: None,
             cm_status: "OPERATIONAL".into(),
-            version_info: VersionInfo {
-                hardware_rev: String::new(),
-                vendor: String::new(),
-                bootloader: String::new(),
-                software_rev: String::new(),
-                model: String::new(),
-                serial: String::new(),
-                firmware_name: String::new(),
-                firmware_build_time: String::new(),
-            },
-            dhcp_info: DhcpInfo {
-                cm_ip: String::new(),
-                cm_subnet: String::new(),
-                cm_gateway: String::new(),
-                lease_total_secs: None,
-                lease_remaining_secs: None,
-                rebind_total_secs: None,
-                rebind_remaining_secs: None,
-                renew_total_secs: None,
-                renew_remaining_secs: None,
-            },
+            status_info: Default::default(),
+            version_info: VersionInfo::default(),
+            dhcp_info: DhcpInfo::default(),
             qos_flows: vec![],
-            cm_state: CmState {
-                overall_state: String::new(),
-                phases: vec![],
-                bpi_status: String::new(),
-                tod_status: String::new(),
-            },
+            cm_state: CmState::default(),
             events: vec![],
             interfaces: vec![],
-            product_info: ProductInfo {
-                ethernet_phy_type: String::new(),
-                logging_components_enabled: vec![],
-            },
+            product_info: ProductInfo::default(),
             spectrum: Vec::<SpectrumChunk>::new(),
             cpe_static: 0,
             cpe_dynamic: 0,
@@ -399,40 +423,36 @@ mod tests {
                 ServiceFlowConfig {
                     direction: "Upstream".into(),
                     index: 0,
-                    max_traffic_rate_kbps: 128000,
-                    max_traffic_burst: 0,
-                    min_reserved_rate_kbps: 0,
-                    traffic_priority: 0,
-                    scheduling_type: 0,
+                    max_traffic_rate_bps: 128000,
+                    ..Default::default()
                 },
                 ServiceFlowConfig {
                     direction: "Downstream".into(),
                     index: 1,
-                    max_traffic_rate_kbps: 128000,
-                    max_traffic_burst: 0,
-                    min_reserved_rate_kbps: 0,
-                    traffic_priority: 0,
-                    scheduling_type: 0,
+                    max_traffic_rate_bps: 128000,
+                    ..Default::default()
                 },
                 ServiceFlowConfig {
                     direction: "Downstream".into(),
                     index: 2,
-                    max_traffic_rate_kbps: 1126400,
-                    max_traffic_burst: 0,
-                    min_reserved_rate_kbps: 0,
-                    traffic_priority: 0,
-                    scheduling_type: 0,
+                    max_traffic_rate_bps: 1126400,
+                    ..Default::default()
                 },
             ],
+            packet_classifications: vec![],
+            common_config: Default::default(),
+            diplexer_bands: vec![],
+            dhcp_log: vec![],
+            dsx_log: vec![],
             scrape_duration_secs: 0.0,
             parse_status: Default::default(),
         };
 
         let capacity = CapacitySemantic::from_data(&data, 95);
-        assert_eq!(capacity.upstream_bps, Some(128_000_000));
-        assert_eq!(capacity.downstream_bps, Some(1_126_400_000));
-        assert_eq!(capacity.shaped_upstream_bps, Some(121_600_000));
-        assert_eq!(capacity.shaped_downstream_bps, Some(1_070_080_000));
+        assert_eq!(capacity.upstream_bps, Some(128_000));
+        assert_eq!(capacity.downstream_bps, Some(1_126_400));
+        assert_eq!(capacity.shaped_upstream_bps, Some(121_600));
+        assert_eq!(capacity.shaped_downstream_bps, Some(1_070_080));
         assert_eq!(capacity.basis, "max_individual_service_flow_rate");
         assert_eq!(capacity.margin_percent, 95);
     }

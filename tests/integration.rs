@@ -15,6 +15,12 @@ fn test_full_pipeline_status_to_metrics() {
         <br><b>[3] COMMON_COMPONENTS</b>: Enabled <br>
         <table><tr><td>[ 0] CLI: Enabled </td><td>[ 1] ENVOY: Enabled </td></tr></table>"#;
     let spectrum_html = r#"<script>var spectrum_data = ["1045a640007270e0000000040001c9c300000001fa24fa10fb64fbdc"];</script>"#;
+    let dhcp_log_html = r#"
+        <title>CM DHCP Log</title>
+        <TABLE><TR><TD><FONT>CM DHCP LOG 1<br>
+        Sun, 25 Oct 2026 09:26:54 +0100<br>Interface: wan0<br>Message type: renew<br>Client ID: aa:bb<br>Server ID: cc:dd<br>Preference: -1<br>IA_NA/IA_PD count: 1<br>IA details:<br>        IA type: 3, IA ID: -123, t1: 172800, t2: 483840, IA addr count: 1<br>        IA prefix addr details:<br>                Stateful addr: 2001:db8::1, Pltime: 604800, Vltime: 604800<br>Options buffer: len: 86, details:<br>        Option: [1]client ID, option len: 10<br></FONT></TD></TR></TABLE>
+    "#;
+    let dsx_html = r#"<title>DSX Message Log</title><h1>DSX Message Log</h1>"#;
 
     let data = parser::parse_all(
         status_html,
@@ -25,6 +31,8 @@ fn test_full_pipeline_status_to_metrics() {
         event_html,
         config_params_html,
         product_html,
+        dhcp_log_html,
+        dsx_html,
         Some(spectrum_html),
         1.5,
     )
@@ -54,6 +62,11 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_section_parse_success{section=\"status\"} 1"));
     assert!(output.contains("cm3500_section_parse_success{section=\"channels\"} 1"));
     assert!(output.contains("cm3500_section_parse_success{section=\"version\"} 1"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"dhcp_log\"} 1"));
+    assert!(output.contains("cm3500_section_parse_success{section=\"dsx_log\"} 1"));
+    assert!(output.contains("cm3500_status_info{"));
+    assert!(output.contains("cm3500_config_file_info{"));
+    assert!(output.contains("cm3500_qos_packet_classification_info{"));
     assert!(output.contains("cm3500_scrape_duration_seconds 1.5"));
     assert!(output.contains("cm3500_cm_status{status=\"OPERATIONAL\"}"));
     assert!(output.contains("cm3500_downstream_qam_power_dbmv{"));
@@ -79,7 +92,7 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_tod_state{"));
 
     // Verify service flow config metrics
-    assert!(output.contains("cm3500_qos_max_traffic_rate_kbps{"));
+    assert!(output.contains("cm3500_qos_max_traffic_rate_bps{"));
     assert!(output.contains("cm3500_capacity_provisioned_bps{direction=\"upstream\""));
     assert!(output.contains("cm3500_capacity_estimated_bps{direction=\"downstream\""));
     assert!(output.contains("margin_percent=\"95\""));
@@ -87,7 +100,7 @@ fn test_full_pipeline_status_to_metrics() {
     assert!(output.contains("cm3500_product_logging_components_enabled{"));
     assert!(output.contains("cm3500_spectrum_chunks 1"));
     assert!(output.contains("cm3500_spectrum_bin_power_dbmv{"));
-    assert!(output.contains("cm3500_qos_min_reserved_rate_kbps{"));
+    assert!(output.contains("cm3500_qos_min_reserved_rate_bps{"));
     assert!(output.contains("cm3500_qos_max_traffic_burst{"));
     assert!(output.contains("cm3500_qos_traffic_priority{"));
     assert!(output.contains("direction=\"Upstream\""));
@@ -125,6 +138,8 @@ fn test_changed_firmware_structure_fails_loudly() {
         include_str!("fixtures/event_cgi.html"),
         include_str!("fixtures/config_params_cgi.html"),
         "",
+        "",
+        "",
         None,
         1.0,
     )
@@ -158,6 +173,8 @@ fn test_metrics_format_valid() {
         event_html,
         config_params_html,
         product_html,
+        "",
+        "",
         None,
         1.0,
     )

@@ -527,11 +527,11 @@
       "type": "gauge",
       "gridPos": { "h": 7, "w": 4, "x": 16, "y": 59 },
       "targets": [
-        { "expr": "max(cm3500_qos_max_traffic_rate_kbps{direction=\"Downstream\"})", "refId": "A", "instant": true }
+        { "expr": "max(cm3500_qos_max_traffic_rate_bps{direction=\"Downstream\"})", "refId": "A", "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "kbps",
+          "unit": "bps",
           "min": 0,
           "max": 1300000,
           "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
@@ -545,14 +545,14 @@
       "type": "table",
       "gridPos": { "h": 7, "w": 4, "x": 20, "y": 59 },
       "targets": [
-        { "expr": "cm3500_qos_max_traffic_rate_kbps", "refId": "A", "instant": true, "format": "table" }
+        { "expr": "cm3500_qos_max_traffic_rate_bps", "refId": "A", "instant": true, "format": "table" }
       ],
       "transformations": [
         {
           "id": "organize",
           "options": {
             "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
-            "renameByName": { "Value": "Rate (kbps)", "direction": "Direction", "flow_index": "Flow" }
+            "renameByName": { "Value": "Rate (bps)", "direction": "Direction", "flow_index": "Flow" }
           }
         }
       ],

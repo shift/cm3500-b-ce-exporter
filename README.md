@@ -15,10 +15,33 @@ nix develop --command bash -c "cargo build --release"
 ./target/release/cm3500-b-ce-exporter --password YOUR_PASSWORD --insecure-tls
 ```
 
-The CM3500B uses a self-signed certificate and does not provide certificate
-management, so `--insecure-tls` is normally required for HTTPS. If you have
-installed a trusted certificate or a local CA, omit `--insecure-tls` and pass
-`--ca-cert /path/to/ca.pem` instead.
+The CM3500B uses a fixed ARRIS device certificate and does not provide
+certificate management. Its name does not match the modem's IP address, so
+ordinary CA validation cannot succeed. You have two options:
+
+- `--insecure-tls` accepts the certificate without authentication.
+- `--tls-cert-fingerprint` pins the leaf certificate's SHA-256 fingerprint. This
+  keeps authentication while tolerating the certificate's name and unknown
+  issuer, and is the preferred option.
+
+Get the fingerprint directly from the modem:
+
+```bash
+openssl s_client -connect 192.168.100.1:443 -servername 192.168.100.1 </dev/null 2>/dev/null \
+  | openssl x509 -noout -fingerprint -sha256
+```
+
+Then run with:
+
+```bash
+./target/release/cm3500-b-ce-exporter \
+  --password YOUR_PASSWORD \
+  --tls-cert-fingerprint "SHA256:25:05:2E:...:11:79"
+```
+
+The certificate is valid for twenty years, so the fingerprint is stable. If a
+firmware update replaces it, the exporter will fail TLS verification until the
+fingerprint is updated. That failure is intentional.
 
 ### Docker Compose (full stack)
 
@@ -53,6 +76,8 @@ Options:
   --request-timeout <SECONDS>  Total HTTP request timeout [default: 15]
   --insecure-tls               Accept the modem's self-signed/invalid TLS certificate
   --ca-cert <PATH>             PEM CA certificate to trust instead of --insecure-tls
+  --tls-cert-fingerprint <SHA256>
+                                Pin the modem's leaf certificate by SHA-256 fingerprint
   --debug-html-dir <DIR>       Write redacted modem HTML on structural parse failure
   --readiness-stale-after <SECONDS>
                                 Fail /ready after this long without a successful scrape
@@ -133,10 +158,10 @@ Example:
 ```json
 {
   "timestamp": "1748850000",
-  "upstream_bps": 128000000,
-  "downstream_bps": 1126400000,
-  "shaped_upstream_bps": 121600000,
-  "shaped_downstream_bps": 1070080000,
+  "upstream_bps": 86250000,
+  "downstream_bps": 690000000,
+  "shaped_upstream_bps": 81937500,
+  "shaped_downstream_bps": 655500000,
   "source": "service_flow_config",
   "basis": "max_individual_service_flow_rate",
   "margin_percent": 95,
@@ -147,8 +172,9 @@ Example:
 Capacity semantics:
 
 - `upstream_bps` / `downstream_bps` are the highest individual provisioned
-  `SfMaxTrafficRate` across the service flows in that direction. They are not an
-  aggregate across flows and are not measured throughput.
+  `SfMaxTrafficRate` across the service flows in that direction. The modem
+  reports this value in bits per second. These are not an aggregate across
+  flows and are not measured throughput.
 - `shaped_*_bps` apply `--capacity-margin-percent` to those provisioned rates.
   They are an operational estimate of usable capacity, not a measurement.
 - DOCSIS service-flow configurations can contain multiple flows per direction;
@@ -167,6 +193,13 @@ When `--enable-spectrum` is set, the exporter performs an active modem spectrum 
 ## Scraping Model
 
 The exporter scrapes the modem on a background interval (default: 30s) and serves the last scrape result from `/metrics`. This avoids doing a full modem login and multi-page fetch on every Prometheus scrape and keeps scrape latency predictable despite the modem's cookie-based session handling.
+
+Every modem page linked from the web interface is fetched and parsed:
+
+`status_cgi`, `vers_cgi`, `dhcp_cgi`, `qos_cgi`, `cm_state_cgi`, `event_cgi`,
+`config_params_cgi`, `product_cgi`, `dhcp_cmLog_cgi`, and `dsx_cgi`. Spectrum
+data is fetched only when `--enable-spectrum` is set, using `spectrum_cgi`.
+Static Open Source attribution content is not telemetry and is not scraped.
 
 A scrape is only considered successful if the required page fields parse:
 
@@ -220,16 +253,42 @@ and rotate these files accordingly.
 | `cm3500_interface_up` | gauge | Interface operational status (1 = Up) |
 | `cm3500_cpe_static` | gauge | Number of static CPE devices detected |
 | `cm3500_cpe_dynamic` | gauge | Number of dynamic CPE devices detected |
+| `cm3500_status_info` | gauge | Time, product type, hardware info, router/telemetry state, RF hardware, market |
+| `cm3500_l2vpn_attachment_circuit_info` | gauge | L2VPN attachment circuit IDs (labels: index, id) |
+| `cm3500_diplexer_band_info` | gauge | Diplexer band ranges and current band setting |
+| `cm3500_config_file_info` | gauge | Configuration file URL |
+| `cm3500_config_upgrade_server_info` | gauge | Configured upgrade server |
+| `cm3500_config_network_access` | gauge | Whether network access is enabled |
+| `cm3500_config_max_cpe_allowed` | gauge | Maximum allowed CPE count |
+| `cm3500_config_privacy_enable` | gauge | Privacy enable setting |
+| `cm3500_config_snmp_mib_info` | gauge | SNMP MIB settings |
 
 ### DHCP
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `cm3500_dhcp_state` | gauge | DHCP state (bound, etc.) |
+| `cm3500_dhcp_state` | gauge | DHCP state |
 | `cm3500_dhcp_lease_total_seconds` | gauge | DHCP lease duration |
 | `cm3500_dhcp_lease_remaining_seconds` | gauge | DHCP lease time remaining |
+| `cm3500_dhcp_rebind_total_seconds` | gauge | Total DHCP rebind duration |
 | `cm3500_dhcp_rebind_remaining_seconds` | gauge | DHCP rebind time remaining |
+| `cm3500_dhcp_renew_total_seconds` | gauge | Total DHCP renew duration |
 | `cm3500_dhcp_renew_remaining_seconds` | gauge | DHCP renew time remaining |
+| `cm3500_dhcp_cm_ip_info` | gauge | Assigned CM IP address |
+| `cm3500_dhcp_cm_subnet_info` | gauge | CM subnet mask |
+| `cm3500_dhcp_cm_gateway_info` | gauge | CM gateway |
+| `cm3500_dhcp_tftp_server_info` | gauge | TFTP server |
+| `cm3500_dhcp_time_server_info` | gauge | Time server |
+| `cm3500_dhcp_boot_file_info` | gauge | Boot file |
+| `cm3500_dhcp_software_filename_info` | gauge | Software filename |
+| `cm3500_dhcp_time_offset_seconds` | gauge | DHCP time offset |
+| `cm3500_dhcp_mdd_ip_override` | gauge | MDD IP override value |
+| `cm3500_dhcp_mdd_ip_override_enabled` | gauge | Whether MDD IP override is enabled |
+| `cm3500_dhcp_mdd_ip_mode` | gauge | MDD IP mode |
+| `cm3500_dhcp_attempts` | gauge | DHCP attempts by family (label: family) |
+| `cm3500_dhcp_log_entries` | gauge | Number of DHCPv6 log entries |
+| `cm3500_dhcp_log_message_type_entries` | gauge | DHCPv6 log entries by message type |
+| `cm3500_dhcp_log_entry_info` | gauge | DHCPv6 log entry details |
 
 ### Downstream SC-QAM
 
@@ -247,6 +306,7 @@ and rotate these files accordingly.
 |--------|------|--------|-------------|
 | `cm3500_downstream_ofdm_channel_width_mhz` | gauge | channel, fft_type | Channel width in MHz |
 | `cm3500_downstream_ofdm_active_subcarriers` | gauge | channel | Number of active subcarriers |
+| `cm3500_downstream_ofdm_active_subcarrier_range_mhz` | gauge | channel, edge | First/last active subcarrier positions |
 | `cm3500_downstream_ofdm_rxmer_db` | gauge | channel, measurement (pilot/plc/data) | Receive MER in dB |
 
 ### Upstream SC-QAM
@@ -295,6 +355,10 @@ and rotate these files accordingly.
 |--------|------|-------------|
 | `cm3500_product_ethernet_phy_info` | gauge | Ethernet PHY capability label from the modem |
 | `cm3500_product_logging_components_enabled` | gauge | Enabled internal logging components by debug group |
+| `cm3500_product_logging_component` | gauge | Per-component logging state (1 = enabled) |
+| `cm3500_product_severity_level` | gauge | Per-severity logging state (1 = enabled) |
+| `cm3500_dsx_log_entries` | gauge | Number of DSX message log entries |
+| `cm3500_dsx_log_entry_info` | gauge | DSX log entry details |
 | `cm3500_spectrum_chunks` | gauge | Number of spectrum chunks returned by a scan |
 | `cm3500_spectrum_chunk_power_dbmv` | gauge | Per-chunk min/avg/max power summary |
 | `cm3500_spectrum_chunk_metadata` | gauge | Per-chunk span/bin spacing/RBW metadata |
@@ -304,10 +368,17 @@ and rotate these files accordingly.
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `cm3500_qos_max_traffic_rate_kbps` | gauge | direction, flow_index | Maximum traffic rate from config |
-| `cm3500_qos_min_reserved_rate_kbps` | gauge | direction, flow_index | Minimum reserved rate from config |
+| `cm3500_qos_max_traffic_rate_bps` | gauge | direction, flow_index | Maximum traffic rate from config (bits/s) |
+| `cm3500_qos_min_reserved_rate_bps` | gauge | direction, flow_index | Minimum reserved rate from config (bits/s) |
 | `cm3500_qos_max_traffic_burst` | gauge | direction, flow_index | Maximum traffic burst from config |
 | `cm3500_qos_traffic_priority` | gauge | direction, flow_index | Traffic priority from config |
+| `cm3500_qos_service_flow_info` | gauge | direction, flow_index, reference, sf_id, service_class | Service-flow identity and class |
+| `cm3500_qos_set_type` | gauge | direction, flow_index | QoS parameter set type |
+| `cm3500_qos_min_reserved_rate_pktsize` | gauge | direction, flow_index | Minimum reserved rate packet size |
+| `cm3500_qos_active_qos_timeout` | gauge | direction, flow_index | Active QoS timeout |
+| `cm3500_qos_admitted_qos_timeout` | gauge | direction, flow_index | Admitted QoS timeout |
+| `cm3500_qos_max_concat_burst` | gauge | direction, flow_index | Maximum concatenated burst |
+| `cm3500_qos_packet_classification_info` | gauge | direction, index, service_flow, identifier, rule_priority, activation_state, ip_protocol, port ranges | Packet classification rules |
 | `cm3500_capacity_provisioned_bps` | gauge | direction, basis | Highest individual provisioned flow rate (not aggregate or measured) |
 | `cm3500_capacity_estimated_bps` | gauge | direction, basis, margin_percent | Provisioned rate multiplied by the configured margin (an estimate) |
 

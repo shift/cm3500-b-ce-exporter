@@ -30,6 +30,8 @@ pub fn write_failed_scrape(dir: &Path, pages: &ScrapedPages, error: &str) -> Res
         ("event_cgi.html", &pages.event),
         ("config_params_cgi.html", &pages.config_params),
         ("product_cgi.html", &pages.product),
+        ("dhcp_cmLog_cgi.html", &pages.dhcp_log),
+        ("dsx_cgi.html", &pages.dsx),
     ] {
         write_private(&out_dir.join(name), &redact(body))?;
     }
@@ -123,6 +125,8 @@ mod tests {
             event: String::new(),
             config_params: String::new(),
             product: String::new(),
+            dhcp_log: String::new(),
+            dsx: String::new(),
         };
         let root = std::env::temp_dir().join(format!("cm3500-debug-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);

@@ -8,6 +8,9 @@ services:
       - "0.0.0.0:10044"
       - "--modem-url"
       - "${MODEM_URL:-https://192.168.100.1}"
+      # For authenticated TLS, replace this with:
+      #   - "--tls-cert-fingerprint"
+      #   - "SHA256:..."
       - "--insecure-tls"
     expose:
       - "10044"

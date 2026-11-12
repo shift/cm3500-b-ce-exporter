@@ -55,6 +55,11 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     ca_cert: Option<PathBuf>,
 
+    /// SHA-256 fingerprint of the modem's TLS certificate. Pins the fixed
+    /// ARRIS certificate without disabling authentication.
+    #[arg(long, value_name = "SHA256")]
+    tls_cert_fingerprint: Option<String>,
+
     /// On structural parse failure, write redacted raw modem HTML here
     #[arg(long, value_name = "DIR")]
     debug_html_dir: Option<PathBuf>,
@@ -152,11 +157,17 @@ async fn main() -> Result<()> {
         bail!("--disable-prometheus requires --otlp-endpoint");
     }
 
+    let cert_fingerprint = args
+        .tls_cert_fingerprint
+        .as_deref()
+        .map(client::parse_fingerprint)
+        .transpose()?;
     let client_options = client::ClientOptions {
         connect_timeout: Duration::from_secs(args.connect_timeout),
         request_timeout: Duration::from_secs(args.request_timeout),
         insecure_tls: args.insecure_tls,
         ca_cert: args.ca_cert.clone(),
+        cert_fingerprint,
     };
     let client = client::ModemClient::new(
         &args.modem_url,
@@ -325,6 +336,8 @@ async fn do_scrape(
                 &pages.event,
                 &pages.config_params,
                 &pages.product,
+                &pages.dhcp_log,
+                &pages.dsx,
                 spectrum_cache.html.as_deref(),
                 duration,
             ) {
@@ -433,8 +446,16 @@ fn validate_args(args: &Args) -> Result<()> {
     if args.readiness_stale_after == Some(0) {
         bail!("--readiness-stale-after must be greater than zero");
     }
-    if args.insecure_tls && args.ca_cert.is_some() {
-        bail!("--insecure-tls and --ca-cert are mutually exclusive");
+    let tls_modes = [
+        args.insecure_tls,
+        args.ca_cert.is_some(),
+        args.tls_cert_fingerprint.is_some(),
+    ]
+    .into_iter()
+    .filter(|enabled| *enabled)
+    .count();
+    if tls_modes > 1 {
+        bail!("--insecure-tls, --ca-cert, and --tls-cert-fingerprint are mutually exclusive");
     }
     Ok(())
 }
@@ -532,5 +553,14 @@ mod tests {
     #[test]
     fn tls_options_are_mutually_exclusive() {
         assert!(validate_args(&args(&["--insecure-tls", "--ca-cert", "/tmp/ca.pem"])).is_err());
+        assert!(validate_args(&args(&["--insecure-tls", "--tls-cert-fingerprint", "aa"])).is_err());
+        assert!(validate_args(&args(&[
+            "--ca-cert",
+            "/tmp/ca.pem",
+            "--tls-cert-fingerprint",
+            "aa"
+        ]))
+        .is_err());
+        assert!(validate_args(&args(&["--tls-cert-fingerprint", "aa"])).is_ok());
     }
 }

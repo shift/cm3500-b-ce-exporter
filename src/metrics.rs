@@ -68,6 +68,7 @@ pub fn render_metrics(data: &ScrapedData, capacity_margin_percent: u8) -> String
         );
     }
 
+    render_status_info(&mut out, &data.status_info, &data.version_info);
     render_downstream_qam(&mut out, &data.downstream_qam);
     render_downstream_ofdm(&mut out, &data.downstream_ofdm);
     render_upstream_qam(&mut out, &data.upstream_qam);
@@ -78,14 +79,19 @@ pub fn render_metrics(data: &ScrapedData, capacity_margin_percent: u8) -> String
     render_event_log(&mut out, &data.events);
     render_interfaces(&mut out, &data.interfaces);
     render_product_info(&mut out, &data.product_info);
+    render_diplexer(&mut out, &data.diplexer_bands);
     render_spectrum(&mut out, &data.spectrum);
     render_cpe(&mut out, data.cpe_static, data.cpe_dynamic);
     render_service_flow_configs(&mut out, &data.service_flow_configs);
+    render_packet_classifications(&mut out, &data.packet_classifications);
+    render_common_config(&mut out, &data.common_config);
     render_capacity(
         &mut out,
         &data.service_flow_configs,
         capacity_margin_percent,
     );
+    render_dhcp_log(&mut out, &data.dhcp_log);
+    render_dsx_log(&mut out, &data.dsx_log);
 
     out
 }
@@ -96,15 +102,15 @@ fn render_capacity(
     margin_percent: u8,
 ) {
     for (direction, label) in [("Upstream", "upstream"), ("Downstream", "downstream")] {
-        let max_kbps = flows
+        let max_bps = flows
             .iter()
             .filter(|f| f.direction.eq_ignore_ascii_case(direction))
-            .map(|f| f.max_traffic_rate_kbps)
+            .map(|f| f.max_traffic_rate_bps)
             .max();
-        let Some(max_kbps) = max_kbps else {
+        let Some(max_bps) = max_bps else {
             continue;
         };
-        let provisioned_bps = max_kbps.saturating_mul(1000);
+        let provisioned_bps = max_bps;
         let estimated_bps = provisioned_bps.saturating_mul(margin_percent as u64) / 100;
         let margin_label = margin_percent.to_string();
         labeled_metric(
@@ -130,6 +136,49 @@ fn render_capacity(
             ],
             &estimated_bps.to_string(),
         );
+    }
+}
+
+fn render_status_info(
+    out: &mut String,
+    info: &crate::parser::StatusInfo,
+    version: &crate::parser::VersionInfo,
+) {
+    labeled_metric(
+        out,
+        "cm3500_status_info",
+        "Static modem status and product information",
+        "gauge",
+        &[
+            ("time_and_date", &info.time_and_date),
+            ("product_type", &info.product_type),
+            ("hardware_info", &info.hardware_info),
+            ("system", &version.system),
+            ("router", bool_label(info.router_enabled)),
+            ("telemetry", bool_label(info.telemetry_enabled)),
+            ("rf_hw", &info.rf_hw),
+            ("market", &info.market),
+        ],
+        "1",
+    );
+
+    for (index, id) in info.l2vpn_attachment_circuit_ids.iter().enumerate() {
+        labeled_metric(
+            out,
+            "cm3500_l2vpn_attachment_circuit_info",
+            "L2VPN attachment circuit identifier",
+            "gauge",
+            &[("index", &(index + 1).to_string()), ("id", id)],
+            "1",
+        );
+    }
+}
+
+fn bool_label(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "enabled",
+        Some(false) => "disabled",
+        None => "unknown",
     }
 }
 
@@ -269,6 +318,26 @@ fn render_downstream_ofdm(out: &mut String, channels: &[crate::parser::Downstrea
             &[("channel", &ch.channel.to_string())],
             ch.active_subcarriers as f64,
         );
+    }
+
+    header(
+        out,
+        "cm3500_downstream_ofdm_active_subcarrier_range_mhz",
+        "First and last active downstream OFDM subcarrier in MHz",
+        "gauge",
+    );
+    for ch in channels {
+        for (edge, value) in [
+            ("first", ch.first_active_subcarrier_mhz),
+            ("last", ch.last_active_subcarrier_mhz),
+        ] {
+            gauge(
+                out,
+                "cm3500_downstream_ofdm_active_subcarrier_range_mhz",
+                &[("channel", &ch.channel.to_string()), ("edge", edge)],
+                value,
+            );
+        }
     }
 
     header(
@@ -442,11 +511,29 @@ fn render_dhcp(out: &mut String, dhcp: &crate::parser::DhcpInfo, dhcp_state: &st
             &v.to_string(),
         );
     }
+    if let Some(v) = dhcp.rebind_total_secs {
+        metric(
+            out,
+            "cm3500_dhcp_rebind_total_seconds",
+            "Total DHCP rebind duration in seconds",
+            "gauge",
+            &v.to_string(),
+        );
+    }
     if let Some(v) = dhcp.rebind_remaining_secs {
         metric(
             out,
             "cm3500_dhcp_rebind_remaining_seconds",
             "DHCP rebind time remaining in seconds",
+            "gauge",
+            &v.to_string(),
+        );
+    }
+    if let Some(v) = dhcp.renew_total_secs {
+        metric(
+            out,
+            "cm3500_dhcp_renew_total_seconds",
+            "Total DHCP renew duration in seconds",
             "gauge",
             &v.to_string(),
         );
@@ -457,6 +544,86 @@ fn render_dhcp(out: &mut String, dhcp: &crate::parser::DhcpInfo, dhcp_state: &st
             "cm3500_dhcp_renew_remaining_seconds",
             "DHCP renew time remaining in seconds",
             "gauge",
+            &v.to_string(),
+        );
+    }
+
+    for (name, help, value) in [
+        (
+            "cm3500_dhcp_cm_ip_info",
+            "Cable modem IP address assigned by DHCP",
+            &dhcp.cm_ip,
+        ),
+        (
+            "cm3500_dhcp_cm_subnet_info",
+            "Cable modem DHCP subnet mask",
+            &dhcp.cm_subnet,
+        ),
+        (
+            "cm3500_dhcp_cm_gateway_info",
+            "Cable modem DHCP gateway",
+            &dhcp.cm_gateway,
+        ),
+        (
+            "cm3500_dhcp_tftp_server_info",
+            "DHCP-provided TFTP server",
+            &dhcp.tftp_server,
+        ),
+        (
+            "cm3500_dhcp_time_server_info",
+            "DHCP-provided time server",
+            &dhcp.time_server,
+        ),
+        (
+            "cm3500_dhcp_boot_file_info",
+            "DHCP-provided cable modem boot file",
+            &dhcp.boot_file,
+        ),
+        (
+            "cm3500_dhcp_software_filename_info",
+            "Software filename reported by the modem",
+            &dhcp.software_filename,
+        ),
+    ] {
+        if !value.is_empty() {
+            labeled_metric(out, name, help, "gauge", &[("value", value)], "1");
+        }
+    }
+
+    if let Some(v) = dhcp.time_offset_seconds {
+        metric(
+            out,
+            "cm3500_dhcp_time_offset_seconds",
+            "DHCP time offset in seconds",
+            "gauge",
+            &v.to_string(),
+        );
+    }
+    if let Some(v) = dhcp.mdd_ip_override {
+        metric(
+            out,
+            "cm3500_dhcp_mdd_ip_override",
+            "MAC Domain Descriptor IP override value",
+            "gauge",
+            &v.to_string(),
+        );
+    }
+    if let Some(v) = dhcp.mdd_ip_override_enabled {
+        metric(
+            out,
+            "cm3500_dhcp_mdd_ip_override_enabled",
+            "Whether the MDD IP override is enabled",
+            "gauge",
+            if v { "1" } else { "0" },
+        );
+    }
+    if let Some(v) = dhcp.mdd_ip_mode {
+        labeled_metric(
+            out,
+            "cm3500_dhcp_mdd_ip_mode",
+            "MAC Domain Descriptor IP mode",
+            "gauge",
+            &[("mode", &dhcp.mdd_ip_mode_name)],
             &v.to_string(),
         );
     }
@@ -538,6 +705,22 @@ fn render_cm_state(out: &mut String, state: &crate::parser::CmState) {
             &[("status", &state.tod_status)],
             "1",
         );
+    }
+
+    for (family, attempts) in [
+        ("ipv4", state.dhcp_ipv4_attempts),
+        ("ipv6", state.dhcp_ipv6_attempts),
+    ] {
+        if let Some(value) = attempts {
+            labeled_metric(
+                out,
+                "cm3500_dhcp_attempts",
+                "Number of DHCP attempts to obtain a CM IP address",
+                "gauge",
+                &[("family", family)],
+                &value.to_string(),
+            );
+        }
     }
 }
 
@@ -737,6 +920,71 @@ fn render_product_info(out: &mut String, product: &crate::parser::ProductInfo) {
             );
         }
     }
+
+    if !product.logging_components.is_empty() {
+        header(
+            out,
+            "cm3500_product_logging_component",
+            "Per-component internal logging state (1 = enabled)",
+            "gauge",
+        );
+        for component in &product.logging_components {
+            gauge(
+                out,
+                "cm3500_product_logging_component",
+                &[
+                    ("index", &component.index.to_string()),
+                    ("component", &component.name),
+                ],
+                if component.enabled { 1.0 } else { 0.0 },
+            );
+        }
+    }
+
+    if !product.severity_levels.is_empty() {
+        header(
+            out,
+            "cm3500_product_severity_level",
+            "Per-severity logging state (1 = enabled)",
+            "gauge",
+        );
+        for level in &product.severity_levels {
+            gauge(
+                out,
+                "cm3500_product_severity_level",
+                &[
+                    ("index", &level.index.to_string()),
+                    ("severity", &level.name),
+                ],
+                if level.enabled { 1.0 } else { 0.0 },
+            );
+        }
+    }
+}
+
+fn render_diplexer(out: &mut String, bands: &[crate::parser::DiplexerBand]) {
+    if bands.is_empty() {
+        return;
+    }
+    header(
+        out,
+        "cm3500_diplexer_band_info",
+        "Diplexer band ranges and current band setting",
+        "gauge",
+    );
+    for band in bands {
+        gauge(
+            out,
+            "cm3500_diplexer_band_info",
+            &[
+                ("band", &band.band.to_string()),
+                ("upstream_range", &band.upstream_range),
+                ("downstream_range", &band.downstream_range),
+                ("current", if band.current { "true" } else { "false" }),
+            ],
+            1.0,
+        );
+    }
 }
 
 fn render_spectrum(out: &mut String, spectrum: &[crate::parser::SpectrumChunk]) {
@@ -861,6 +1109,7 @@ fn render_interfaces(out: &mut String, interfaces: &[crate::parser::InterfaceInf
             &[
                 ("name", &iface.name),
                 ("provisioned", &iface.provisioned),
+                ("speed_mbps", &iface.speed_mbps),
                 ("mac_address", &iface.mac_address),
             ],
             up,
@@ -892,37 +1141,37 @@ fn render_service_flow_configs(out: &mut String, flows: &[crate::parser::Service
 
     header(
         out,
-        "cm3500_qos_max_traffic_rate_kbps",
-        "Maximum traffic rate for the QoS service flow from config (kbps)",
+        "cm3500_qos_max_traffic_rate_bps",
+        "Maximum traffic rate for the QoS service flow from config (bits/s)",
         "gauge",
     );
     for f in flows {
         gauge(
             out,
-            "cm3500_qos_max_traffic_rate_kbps",
+            "cm3500_qos_max_traffic_rate_bps",
             &[
                 ("direction", &f.direction),
                 ("flow_index", &f.index.to_string()),
             ],
-            f.max_traffic_rate_kbps as f64,
+            f.max_traffic_rate_bps as f64,
         );
     }
 
     header(
         out,
-        "cm3500_qos_min_reserved_rate_kbps",
-        "Minimum reserved rate for the QoS service flow from config (kbps)",
+        "cm3500_qos_min_reserved_rate_bps",
+        "Minimum reserved rate for the QoS service flow from config (bits/s)",
         "gauge",
     );
     for f in flows {
         gauge(
             out,
-            "cm3500_qos_min_reserved_rate_kbps",
+            "cm3500_qos_min_reserved_rate_bps",
             &[
                 ("direction", &f.direction),
                 ("flow_index", &f.index.to_string()),
             ],
-            f.min_reserved_rate_kbps as f64,
+            f.min_reserved_rate_bps as f64,
         );
     }
 
@@ -959,6 +1208,329 @@ fn render_service_flow_configs(out: &mut String, flows: &[crate::parser::Service
                 ("flow_index", &f.index.to_string()),
             ],
             f.traffic_priority as f64,
+        );
+    }
+
+    header(
+        out,
+        "cm3500_qos_service_flow_info",
+        "Service-flow identity and class information from config",
+        "gauge",
+    );
+    for f in flows {
+        gauge(
+            out,
+            "cm3500_qos_service_flow_info",
+            &[
+                ("direction", &f.direction),
+                ("flow_index", &f.index.to_string()),
+                ("reference", &f.reference.to_string()),
+                ("sf_id", &f.sf_id.map(|v| v.to_string()).unwrap_or_default()),
+                ("service_class", &f.service_class),
+            ],
+            1.0,
+        );
+    }
+
+    for (name, help, values) in [
+        (
+            "cm3500_qos_set_type",
+            "QoS parameter set type",
+            flows
+                .iter()
+                .map(|f| f.qos_set_type as f64)
+                .collect::<Vec<f64>>(),
+        ),
+        (
+            "cm3500_qos_min_reserved_rate_pktsize",
+            "Minimum reserved rate packet size",
+            flows
+                .iter()
+                .map(|f| f.min_reserved_rate_pktsize as f64)
+                .collect::<Vec<f64>>(),
+        ),
+        (
+            "cm3500_qos_active_qos_timeout",
+            "Active QoS timeout",
+            flows
+                .iter()
+                .map(|f| f.active_qos_timeout as f64)
+                .collect::<Vec<f64>>(),
+        ),
+        (
+            "cm3500_qos_admitted_qos_timeout",
+            "Admitted QoS timeout",
+            flows
+                .iter()
+                .map(|f| f.admitted_qos_timeout as f64)
+                .collect::<Vec<f64>>(),
+        ),
+        (
+            "cm3500_qos_max_concat_burst",
+            "Maximum concatenated burst",
+            flows
+                .iter()
+                .map(|f| f.max_concat_burst as f64)
+                .collect::<Vec<f64>>(),
+        ),
+    ] {
+        header(out, name, help, "gauge");
+        for (flow, value) in flows.iter().zip(values) {
+            gauge(
+                out,
+                name,
+                &[
+                    ("direction", &flow.direction),
+                    ("flow_index", &flow.index.to_string()),
+                ],
+                value,
+            );
+        }
+    }
+}
+
+fn render_packet_classifications(
+    out: &mut String,
+    classifications: &[crate::parser::PacketClassification],
+) {
+    if classifications.is_empty() {
+        return;
+    }
+    header(
+        out,
+        "cm3500_qos_packet_classification_info",
+        "Packet classification rules from the modem configuration",
+        "gauge",
+    );
+    for pc in classifications {
+        gauge(
+            out,
+            "cm3500_qos_packet_classification_info",
+            &[
+                ("direction", &pc.direction),
+                ("index", &pc.index.to_string()),
+                ("service_flow", &pc.service_flow.to_string()),
+                ("identifier", &pc.identifier.to_string()),
+                ("rule_priority", &pc.rule_priority.to_string()),
+                ("activation_state", &pc.activation_state.to_string()),
+                ("ip_protocol", &pc.ip_protocol.to_string()),
+                (
+                    "source_port_start",
+                    &pc.source_port_start
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                ),
+                (
+                    "source_port_end",
+                    &pc.source_port_end
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                ),
+                (
+                    "dest_port_start",
+                    &pc.dest_port_start
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                ),
+                (
+                    "dest_port_end",
+                    &pc.dest_port_end.map(|v| v.to_string()).unwrap_or_default(),
+                ),
+            ],
+            1.0,
+        );
+    }
+}
+
+fn render_common_config(out: &mut String, config: &crate::parser::CommonConfig) {
+    for (name, help, value) in [
+        (
+            "cm3500_config_file_info",
+            "Configuration file URL used by the modem",
+            &config.config_file,
+        ),
+        (
+            "cm3500_config_upgrade_server_info",
+            "Configured software upgrade server",
+            &config.upgrade_server,
+        ),
+    ] {
+        if !value.is_empty() {
+            labeled_metric(out, name, help, "gauge", &[("value", value)], "1");
+        }
+    }
+    if let Some(v) = config.network_access {
+        metric(
+            out,
+            "cm3500_config_network_access",
+            "Whether network access is enabled in the modem configuration",
+            "gauge",
+            if v { "1" } else { "0" },
+        );
+    }
+    if let Some(v) = config.max_cpe_allowed {
+        metric(
+            out,
+            "cm3500_config_max_cpe_allowed",
+            "Maximum CPE devices allowed by the modem configuration",
+            "gauge",
+            &v.to_string(),
+        );
+    }
+    if let Some(v) = config.privacy_enable {
+        metric(
+            out,
+            "cm3500_config_privacy_enable",
+            "Privacy enable setting from the modem configuration",
+            "gauge",
+            &v.to_string(),
+        );
+    }
+    if !config.snmp_mib.is_empty() {
+        header(
+            out,
+            "cm3500_config_snmp_mib_info",
+            "SNMP MIB settings from the modem configuration",
+            "gauge",
+        );
+        for (index, value) in config.snmp_mib.iter().enumerate() {
+            gauge(
+                out,
+                "cm3500_config_snmp_mib_info",
+                &[("index", &index.to_string()), ("value", value)],
+                1.0,
+            );
+        }
+    }
+}
+
+fn render_dhcp_log(out: &mut String, entries: &[crate::parser::DhcpLogEntry]) {
+    if entries.is_empty() {
+        return;
+    }
+    metric(
+        out,
+        "cm3500_dhcp_log_entries",
+        "Number of DHCPv6 log entries exposed by the modem",
+        "gauge",
+        &entries.len().to_string(),
+    );
+
+    let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for entry in entries {
+        *counts.entry(&entry.message_type).or_insert(0) += 1;
+    }
+    header(
+        out,
+        "cm3500_dhcp_log_message_type_entries",
+        "DHCPv6 log entry count by message type",
+        "gauge",
+    );
+    for (message_type, count) in counts {
+        gauge(
+            out,
+            "cm3500_dhcp_log_message_type_entries",
+            &[("message_type", message_type)],
+            count as f64,
+        );
+    }
+
+    header(
+        out,
+        "cm3500_dhcp_log_entry_info",
+        "DHCPv6 log entry details",
+        "gauge",
+    );
+    for entry in entries {
+        let options = entry
+            .options
+            .iter()
+            .map(|(id, name)| format!("{}:{}", id, name))
+            .collect::<Vec<_>>()
+            .join(",");
+        gauge(
+            out,
+            "cm3500_dhcp_log_entry_info",
+            &[
+                ("index", &entry.index.to_string()),
+                ("timestamp", &entry.timestamp),
+                ("interface", &entry.interface),
+                ("message_type", &entry.message_type),
+                ("client_id", &entry.client_id),
+                ("server_id", &entry.server_id),
+                (
+                    "preference",
+                    &entry.preference.map(|v| v.to_string()).unwrap_or_default(),
+                ),
+                (
+                    "ia_type",
+                    &entry.ia_type.map(|v| v.to_string()).unwrap_or_default(),
+                ),
+                (
+                    "ia_id",
+                    &entry.ia_id.map(|v| v.to_string()).unwrap_or_default(),
+                ),
+                ("t1", &entry.t1.map(|v| v.to_string()).unwrap_or_default()),
+                ("t2", &entry.t2.map(|v| v.to_string()).unwrap_or_default()),
+                (
+                    "ia_addr_count",
+                    &entry
+                        .ia_addr_count
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                ),
+                (
+                    "options_len",
+                    &entry.options_len.map(|v| v.to_string()).unwrap_or_default(),
+                ),
+                ("stateful_addr", &entry.stateful_addr),
+                (
+                    "preferred_lifetime_seconds",
+                    &entry
+                        .preferred_lifetime
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                ),
+                (
+                    "valid_lifetime_seconds",
+                    &entry
+                        .valid_lifetime
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                ),
+                ("options", &options),
+            ],
+            1.0,
+        );
+    }
+}
+
+fn render_dsx_log(out: &mut String, entries: &[crate::parser::DsxLogEntry]) {
+    metric(
+        out,
+        "cm3500_dsx_log_entries",
+        "Number of DSX message log entries exposed by the modem",
+        "gauge",
+        &entries.len().to_string(),
+    );
+    if entries.is_empty() {
+        return;
+    }
+    header(
+        out,
+        "cm3500_dsx_log_entry_info",
+        "DSX message log entry details",
+        "gauge",
+    );
+    for (index, entry) in entries.iter().enumerate() {
+        gauge(
+            out,
+            "cm3500_dsx_log_entry_info",
+            &[
+                ("index", &index.to_string()),
+                ("message", &entry.cells.join(" | ")),
+            ],
+            1.0,
         );
     }
 }
