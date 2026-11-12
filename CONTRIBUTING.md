@@ -21,7 +21,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 
 # Run locally
-cargo run -- --password YOUR_PASSWORD
+cargo run -- --password YOUR_PASSWORD --insecure-tls
 ```
 
 ## Submitting Changes
