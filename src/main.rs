@@ -182,7 +182,11 @@ async fn main() -> Result<()> {
     )?;
 
     tracing::info!("Logging into modem at {}", args.modem_url);
-    client.login().await?;
+    if let Err(e) = client.login().await {
+        // Keep the exporter alive so /health, /ready, and /metrics can report
+        // the failure. The scrape loop will retry the login.
+        tracing::error!("Initial modem login failed: {}", e);
+    }
 
     let mut automation_outputs = automation::AutomationOutputs::new(
         args.state_file.clone(),

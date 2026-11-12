@@ -1,4 +1,4 @@
-use crate::parser::{DhcpLogEntry, EventLogEntry, ScrapedData};
+use crate::parser::{DhcpLogEntry, DsxLogEntry, EventLogEntry, ScrapedData};
 use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde_json::{json, Map, Value};
@@ -1406,6 +1406,7 @@ impl OtlpClient {
     fn build_logs_body(&self, data: &ScrapedData, now: &str) -> Option<Value> {
         let mut records = self.new_log_records(&data.events, now);
         records.extend(self.new_dhcp_log_records(&data.dhcp_log, now));
+        records.extend(self.new_dsx_log_records(&data.dsx_log, now));
         if records.is_empty() {
             return None;
         }
@@ -1550,6 +1551,39 @@ impl OtlpClient {
                     entry.message_type, entry.interface, entry.stateful_addr
                 )},
                 "attributes": attrs,
+            }));
+
+            sent.push_back(key);
+            while sent.len() > 256 {
+                sent.pop_front();
+            }
+        }
+
+        records
+    }
+
+    fn new_dsx_log_records(&self, entries: &[DsxLogEntry], now: &str) -> Vec<Value> {
+        let mut sent = self.sent_event_keys.lock().unwrap();
+        let mut records = Vec::new();
+
+        for (index, entry) in entries.iter().enumerate() {
+            let message = entry.cells.join(" | ");
+            let key = format!("dsx|{}|{}", index, message);
+            if sent.iter().any(|existing| existing == &key) {
+                continue;
+            }
+
+            records.push(json!({
+                "timeUnixNano": now,
+                "observedTimeUnixNano": now,
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": { "stringValue": message },
+                "attributes": vec![
+                    str_attr("event.name", "cable_modem.dsx_log"),
+                    str_attr("event.domain", "cable_modem"),
+                    int_attr("cable_modem.dsx.log.index", index as i64),
+                ],
             }));
 
             sent.push_back(key);
@@ -1824,9 +1858,9 @@ fn extract_ofdma_profile(description: &str) -> Option<(String, u32)> {
 mod tests {
     use super::*;
     use crate::parser::{
-        CmState, DhcpInfo, DhcpLogEntry, DocsisPhase, DownstreamOfdm, DownstreamQam, EventLogEntry,
-        InterfaceInfo, ProductInfo, QosFlow, ScrapedData, ServiceFlowConfig, SpectrumChunk,
-        UpstreamOfdm, UpstreamQam, VersionInfo,
+        CmState, DhcpInfo, DhcpLogEntry, DocsisPhase, DownstreamOfdm, DownstreamQam, DsxLogEntry,
+        EventLogEntry, InterfaceInfo, ProductInfo, QosFlow, ScrapedData, ServiceFlowConfig,
+        SpectrumChunk, UpstreamOfdm, UpstreamQam, VersionInfo,
     };
 
     #[test]
@@ -1992,6 +2026,30 @@ mod tests {
         assert_eq!(
             attr_value(&dhcp["attributes"], "cable_modem.dhcp.log.stateful_addr").as_deref(),
             Some("2a02:8101:1130:d::c2a")
+        );
+    }
+
+    #[test]
+    fn otlp_includes_dsx_log_records() {
+        let mut data = sample_data();
+        data.dsx_log = vec![DsxLogEntry {
+            cells: vec!["DSX message".into(), "detail".into()],
+        }];
+        let client = OtlpClient::new("https://example.test/otlp", vec![], &data);
+        let body = client.build_logs_body(&data, "1000000000").unwrap();
+        let records = body["resourceLogs"][0]["scopeLogs"][0]["logRecords"]
+            .as_array()
+            .unwrap();
+        assert_eq!(records.len(), 6);
+        let dsx = records
+            .iter()
+            .find(|r| {
+                attr_value(&r["attributes"], "event.name").as_deref() == Some("cable_modem.dsx_log")
+            })
+            .expect("DSX log record should be present");
+        assert_eq!(
+            dsx["body"]["stringValue"].as_str(),
+            Some("DSX message | detail")
         );
     }
 

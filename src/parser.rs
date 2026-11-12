@@ -1527,6 +1527,21 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_dsx_log_rows() {
+        let html = r#"
+        <title>DSX Message Log</title>
+        <table>
+          <tr><td>DSX-1</td><td>Service flow created</td></tr>
+          <tr><td>DSX-2</td><td>Service flow deleted</td></tr>
+        </table>
+        "#;
+        let entries = parse_dsx_log(html);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].cells[0], "DSX-1");
+        assert_eq!(entries[1].cells[1], "Service flow deleted");
+    }
+
+    #[test]
     fn test_parse_service_flow_and_classification_details() {
         let html = r#"
             UpstreamServiceFlow =

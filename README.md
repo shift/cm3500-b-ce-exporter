@@ -231,7 +231,9 @@ channel metrics.
 - `/metrics` always serves the most recent result, successful or not.
 
 Use `/ready` for container orchestration and external alerting; use `/health`
-only to detect a dead process.
+only to detect a dead process. An initial login failure is logged but does not
+exit the process, so the HTTP endpoints remain available while the scrape loop
+retries the modem.
 
 ## Debugging Failed Parses
 
