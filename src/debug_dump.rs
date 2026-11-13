@@ -6,10 +6,16 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub const DEBUG_DIR: &str = "cm3500-debug";
+
 /// Persist the raw modem pages for a structurally invalid scrape so firmware
-/// changes can be diagnosed later. Files are written with restrictive
-/// permissions and token-like values are redacted.
-pub fn write_failed_scrape(dir: &Path, pages: &ScrapedPages, error: &str) -> Result<PathBuf> {
+/// changes can be diagnosed later. Files are written under a fixed relative
+/// directory with restrictive permissions and token-like values are redacted.
+pub fn write_failed_scrape(pages: &ScrapedPages, error: &str) -> Result<PathBuf> {
+    write_failed_scrape_in(Path::new(DEBUG_DIR), pages, error)
+}
+
+fn write_failed_scrape_in(dir: &Path, pages: &ScrapedPages, error: &str) -> Result<PathBuf> {
     fs::create_dir_all(dir)
         .with_context(|| format!("failed to create debug directory {}", dir.display()))?;
 
@@ -138,13 +144,13 @@ mod tests {
             dhcp_log: String::new(),
             dsx: String::new(),
         };
-        let root = std::env::temp_dir().join(format!("cm3500-debug-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        let out = write_failed_scrape(&root, &pages, "status missing").unwrap();
+        let root = Path::new("target/cm3500-debug-test");
+        let _ = fs::remove_dir_all(root);
+        let out = write_failed_scrape_in(root, &pages, "status missing").unwrap();
         assert!(out.join("status_cgi.html").exists());
         assert!(out.join("parse-error.txt").exists());
         let status = fs::read_to_string(out.join("status_cgi.html")).unwrap();
         assert!(!status.contains("secret"));
-        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(root);
     }
 }

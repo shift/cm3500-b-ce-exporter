@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.3
+
+### Security
+
+- Replaced `danger_accept_invalid_certs` with an explicit rustls verifier for
+  the opt-in insecure mode, preserving handshake signature checks.
+- Removed user-controlled debug paths. `--debug-html` now writes only to the
+  fixed relative directory `./cm3500-debug`.
+- Replaced hard-coded test passwords with per-process generated values.
+
 ## v0.2.2
 
 ### Fixed

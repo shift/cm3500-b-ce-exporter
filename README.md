@@ -88,7 +88,7 @@ Options:
   --ca-cert <PATH>             PEM CA certificate to trust instead of --insecure-tls
   --tls-cert-fingerprint <SHA256>
                                 Pin the modem's leaf certificate by SHA-256 fingerprint
-  --debug-html-dir <DIR>       Write redacted modem HTML on structural parse failure
+  --debug-html                 Write redacted modem HTML to ./cm3500-debug on parse failure
   --readiness-stale-after <SECONDS>
                                 Fail /ready after this long without a successful scrape
                                 [default: max(60, 3 × interval)]
@@ -248,7 +248,7 @@ retries the modem.
 
 ## Debugging Failed Parses
 
-Set `--debug-html-dir /var/lib/cm3500/debug` to preserve the modem responses
+Set `--debug-html` to preserve the modem responses under `./cm3500-debug`
 when an essential field fails to parse. Each failure creates a timestamped
 directory containing the raw pages and `parse-error.txt`.
 

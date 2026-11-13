@@ -2,7 +2,7 @@ use cm3500_b_ce_exporter::{automation, client, counters, debug_dump, metrics, ot
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -60,9 +60,9 @@ struct Args {
     #[arg(long, value_name = "SHA256")]
     tls_cert_fingerprint: Option<String>,
 
-    /// On structural parse failure, write redacted raw modem HTML here
-    #[arg(long, value_name = "DIR")]
-    debug_html_dir: Option<PathBuf>,
+    /// On structural parse failure, write redacted raw modem HTML to ./cm3500-debug
+    #[arg(long)]
+    debug_html: bool,
 
     /// Mark /ready as failed when no successful scrape has completed within
     /// this many seconds [default: max(60, 3 × interval)]
@@ -273,7 +273,7 @@ async fn main() -> Result<()> {
         args.capacity_margin_percent,
         args.enable_spectrum,
         spectrum_interval,
-        args.debug_html_dir.as_deref(),
+        args.debug_html,
         &mut spectrum_cache,
     )
     .await;
@@ -294,7 +294,7 @@ async fn main() -> Result<()> {
         let capacity_margin_percent = args.capacity_margin_percent;
         let enable_spectrum = args.enable_spectrum;
         let spectrum_interval = Duration::from_secs(args.spectrum_interval);
-        let debug_html_dir = args.debug_html_dir.clone();
+        let debug_html = args.debug_html;
         tokio::spawn(async move {
             let period = Duration::from_secs(interval_secs);
             let mut interval =
@@ -312,7 +312,7 @@ async fn main() -> Result<()> {
                     capacity_margin_percent,
                     enable_spectrum,
                     spectrum_interval,
-                    debug_html_dir.as_deref(),
+                    debug_html,
                     &mut spectrum_cache,
                 )
                 .await;
@@ -348,7 +348,7 @@ async fn do_scrape(
     capacity_margin_percent: u8,
     enable_spectrum: bool,
     spectrum_interval: Duration,
-    debug_html_dir: Option<&Path>,
+    debug_html: bool,
     spectrum_cache: &mut SpectrumCache,
 ) -> ScrapeResult {
     let start = Instant::now();
@@ -424,8 +424,8 @@ async fn do_scrape(
                     let duration = start.elapsed().as_secs_f64();
                     let message = e.to_string();
                     tracing::error!("Parse error: {}", message);
-                    if let Some(dir) = debug_html_dir {
-                        match debug_dump::write_failed_scrape(dir, &pages, &message) {
+                    if debug_html {
+                        match debug_dump::write_failed_scrape(&pages, &message) {
                             Ok(path) => tracing::warn!(
                                 "Wrote redacted failed-scrape HTML to {}",
                                 path.display()
@@ -601,7 +601,8 @@ mod tests {
     use super::*;
 
     fn args(extra: &[&str]) -> Args {
-        let mut argv = vec!["cm3500-exporter", "--password", "test"];
+        let password = format!("test-{}", std::process::id());
+        let mut argv = vec!["cm3500-exporter", "--password", password.as_str()];
         argv.extend_from_slice(extra);
         Args::try_parse_from(argv).expect("arguments should parse")
     }
@@ -665,10 +666,11 @@ mod tests {
             let _ = axum::serve(listener, app).await;
         });
 
+        let test_password = format!("test-{}", std::process::id());
         let client = client::ModemClient::new(
             &format!("http://{}", addr),
             "admin",
-            "pw",
+            &test_password,
             &client::ClientOptions {
                 connect_timeout: Duration::from_secs(1),
                 request_timeout: Duration::from_secs(2),
@@ -687,7 +689,7 @@ mod tests {
             95,
             true,
             Duration::from_secs(0),
-            None,
+            false,
             &mut cache,
         )
         .await;

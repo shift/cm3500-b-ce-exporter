@@ -70,7 +70,8 @@ async fn reauthenticates_once_when_session_expires() {
     let logins = mock.logins.clone();
     let base = start_mock(mock).await;
 
-    let client = ModemClient::new(&base, "admin", "pw", &options(Duration::from_secs(2)))
+    let password = format!("test-{}", std::process::id());
+    let client = ModemClient::new(&base, "admin", &password, &options(Duration::from_secs(2)))
         .expect("client should build");
     let pages = client.fetch_all().await.expect("fetch should recover");
 
@@ -86,8 +87,14 @@ async fn request_timeout_bounds_a_hung_modem() {
         ..Default::default()
     };
     let base = start_mock(mock).await;
-    let client = ModemClient::new(&base, "admin", "pw", &options(Duration::from_millis(150)))
-        .expect("client should build");
+    let password = format!("test-{}", std::process::id());
+    let client = ModemClient::new(
+        &base,
+        "admin",
+        &password,
+        &options(Duration::from_millis(150)),
+    )
+    .expect("client should build");
 
     let started = Instant::now();
     let err = client
