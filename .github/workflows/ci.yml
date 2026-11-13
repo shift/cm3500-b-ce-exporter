@@ -49,11 +49,13 @@ jobs:
   audit:
     name: Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
 
   rules:
     name: Prometheus rules
@@ -64,8 +66,9 @@ jobs:
         run: |
           jq empty grafana/dashboard.json grafana/dashboard_otlp.json
           for f in prometheus/alert_rules_*.yml; do
-            docker run --rm -v "$PWD/prometheus:/rules" prom/prometheus:latest \
-              promtool check rules "/rules/$(basename "$f")"
+            docker run --rm --entrypoint promtool \
+              -v "$PWD/prometheus:/rules" prom/prometheus:latest \
+              check rules "/rules/$(basename "$f")"
           done
 
   docker:
