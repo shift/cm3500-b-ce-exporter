@@ -32,9 +32,6 @@
 - Spectrum bin allocation is bounded, failed scans respect the scan interval,
   and scan age is exported.
 - Removed the high-churn `time_and_date` label and unbounded scrape-error label.
-- Added exporter-side monotonic event counters (`cm3500_event_*_total` and
-  OTLP equivalents); event alerts now use `increase()` instead of `changes()`
-  on rolling-window gauges.
 - Debug bundles are pruned to the ten most recent failures.
 - Prometheus and OTLP metrics now include parser-health, capacity, DHCPv6 and
   DSX coverage; dashboards and alerts were updated accordingly.
